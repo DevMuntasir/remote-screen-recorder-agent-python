@@ -1,0 +1,5 @@
+python-socketio[client]
+opencv-python
+numpy
+pyautogui
+cloudinary

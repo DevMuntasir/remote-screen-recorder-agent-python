@@ -1,0 +1,142 @@
+2026-03-28 14:59:40.227772: HTTPConnectionPool(host='localhost', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774688376.121124 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-29 11:39:22.730655: HTTPConnectionPool(host='localhost', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774762758.6566749 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-29 11:44:50.870110: HTTPConnectionPool(host='localhost', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774763086.75955 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-29 11:57:58.020179: HTTPConnectionPool(host='localhost', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774763873.9499433 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-29 12:08:18.070592: Connected to https://remote-agent-node.onrender.com
+2026-03-29 12:10:13.482858: Connected to https://remote-agent-node.onrender.com
+2026-03-29 12:26:20.144274: Disconnected from server
+2026-03-29 12:26:24.462026: Connected to https://remote-agent-node.onrender.com
+2026-03-29 12:42:05.562180: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-29 12:42:16.136165: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-29 12:42:26.645647: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-29 12:42:37.187683: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-29 12:42:48.036755: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-29 12:42:55.955884: Connected to https://remote-agent-node.onrender.com
+2026-03-29 12:44:57.017333: Connected to https://remote-agent-node.onrender.com
+2026-03-29 12:48:36.594959: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:00:08.573626: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:03:13.176232: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:03:40.989653: start_capture received
+2026-03-29 13:03:41.009983: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-03-40.mp4
+2026-03-29 13:03:49.255064: stop_capture received
+2026-03-29 13:03:49.394273: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-03-40.mp4
+2026-03-29 13:03:49.397611: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-03-40.mp4
+2026-03-29 13:03:54.219836: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1774767833/pxg59sr1uxmd2ykk804j.mp4
+2026-03-29 13:03:54.220758: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-03-40.mp4
+2026-03-29 13:08:14.533322: start_camera received
+2026-03-29 13:08:16.916519: Camera stream started
+2026-03-29 13:08:20.853623: stop_camera received
+2026-03-29 13:08:21.208246: Camera stream stopped
+2026-03-29 13:12:56.601676: Disconnected from server
+2026-03-29 13:13:01.564881: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:18:20.381044: start_capture received
+2026-03-29 13:18:20.387369: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-18-20.mp4
+2026-03-29 13:18:33.426918: stop_capture received
+2026-03-29 13:18:33.448311: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-18-20.mp4
+2026-03-29 13:18:33.453261: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-18-20.mp4
+2026-03-29 13:18:41.971768: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1774768720/yzvfcgzxxvju5fjvqkwo.mp4
+2026-03-29 13:18:41.972837: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-18-20.mp4
+2026-03-29 13:25:39.709589: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:25:48.808072: start_capture received
+2026-03-29 13:25:48.840137: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-25-48.mp4
+2026-03-29 13:26:01.691614: stop_capture received
+2026-03-29 13:26:01.772480: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-25-48.mp4
+2026-03-29 13:26:01.776679: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-25-48.mp4
+2026-03-29 13:26:09.461727: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1774769168/dwymsywgz1jvpeqdyevy.mp4
+2026-03-29 13:26:09.462636: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-25-48.mp4
+2026-03-29 13:26:14.845177: start_camera received
+2026-03-29 13:26:18.181255: Camera stream started
+2026-03-29 13:26:23.265835: stop_camera received
+2026-03-29 13:26:23.664903: Camera stream stopped
+2026-03-29 13:26:38.143574: Disconnected from server
+2026-03-29 13:26:41.601718: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:26:55.907641: start_capture received
+2026-03-29 13:26:55.910429: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-26-55.mp4
+2026-03-29 13:27:11.331906: stop_capture received
+2026-03-29 13:27:11.486540: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-26-55.mp4
+2026-03-29 13:27:11.489399: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-26-55.mp4
+2026-03-29 13:27:16.555712: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1774769236/k2vvsvlhhxvr8azeoo5o.mp4
+2026-03-29 13:27:16.557530: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_13-26-55.mp4
+2026-03-29 13:30:58.138898: start_camera received
+2026-03-29 13:30:59.675190: Camera stream started
+2026-03-29 13:31:02.670322: stop_camera received
+2026-03-29 13:31:03.014377: Disconnected from server
+2026-03-29 13:31:03.098941: Failed to emit agent state (camera_loop_stopped): / is not a connected namespace.
+2026-03-29 13:31:03.099787: Camera stream stopped
+2026-03-29 13:32:52.062757: Connected to https://remote-agent-node.onrender.com
+2026-03-29 13:58:07.971497: Disconnected from server
+2026-03-29 13:58:52.136311: Connected to https://remote-agent-node.onrender.com
+2026-03-29 14:03:39.131958: start_camera received
+2026-03-29 14:03:41.001029: Camera stream started
+2026-03-29 14:03:54.900555: stop_camera received
+2026-03-29 14:03:55.245279: Camera stream stopped
+2026-03-29 14:04:01.227053: start_camera received
+2026-03-29 14:04:03.044564: Camera stream started
+2026-03-29 14:04:12.542702: start_capture received
+2026-03-29 14:04:12.546823: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_14-04-12.mp4
+2026-03-29 14:15:15.306862: Connected to https://remote-agent-node.onrender.com
+2026-03-29 14:16:39.608408: start_capture received
+2026-03-29 14:16:39.622539: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_14-16-39.mp4
+2026-03-29 14:17:29.149456: start_camera received
+2026-03-29 14:17:33.212488: Camera stream started
+2026-03-29 14:17:38.601592: stop_camera received
+2026-03-29 14:17:39.059935: Camera stream stopped
+2026-03-29 14:17:40.844611: stop_capture received
+2026-03-29 14:17:40.877980: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_14-16-39.mp4
+2026-03-29 14:17:40.882037: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_14-16-39.mp4
+2026-03-29 14:17:54.026215: stop_capture received
+2026-03-29 14:17:58.820175: stop_capture received
+2026-03-29 14:17:59.359587: stop_capture received
+2026-03-29 14:18:00.636969: stop_capture received
+2026-03-29 14:18:06.101990: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1774772285/flogv6uslmqs2i5kavuw.mp4
+2026-03-29 14:18:06.106928: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-03-29_14-16-39.mp4
+2026-03-29 14:33:05.930951: Disconnected from server
+2026-03-29 14:33:52.242692: Connected to https://remote-agent-node.onrender.com
+2026-03-29 14:49:01.020503: Disconnected from server
+2026-03-29 14:49:45.871071: Connected to https://remote-agent-node.onrender.com
+2026-03-29 15:04:54.966435: Disconnected from server
+2026-03-29 15:06:27.326854: Connected to https://remote-agent-node.onrender.com
+2026-03-29 15:22:15.917651: Disconnected from server
+2026-03-29 15:23:16.892830: Connected to https://remote-agent-node.onrender.com
+2026-03-29 15:30:01.280098: Disconnected from server
+2026-03-29 15:30:12.290922: Connected to https://remote-agent-node.onrender.com
+2026-03-29 15:45:24.936868: Disconnected from server
+2026-03-29 15:47:01.339634: Connected to https://remote-agent-node.onrender.com
+2026-03-29 16:02:15.906816: Disconnected from server
+2026-03-29 16:04:52.182347: Connected to https://remote-agent-node.onrender.com
+2026-03-29 16:20:00.928017: Disconnected from server
+2026-03-29 16:21:08.202653: Connected to https://remote-agent-node.onrender.com
+2026-03-29 16:36:17.002085: Disconnected from server
+2026-03-29 16:37:05.019135: Connected to https://remote-agent-node.onrender.com
+2026-03-29 16:42:39.454313: Disconnected from server
+2026-03-29 16:42:42.666660: Connected to https://remote-agent-node.onrender.com
+2026-03-29 16:57:51.996533: Disconnected from server
+2026-03-29 16:58:23.261874: Connected to https://remote-agent-node.onrender.com
+2026-03-29 17:13:31.953290: Disconnected from server
+2026-03-29 17:14:01.028583: Connected to https://remote-agent-node.onrender.com
+2026-03-29 17:29:09.946743: Disconnected from server
+2026-03-29 17:29:58.929572: Connected to https://remote-agent-node.onrender.com
+2026-03-29 17:45:07.960003: Disconnected from server
+2026-03-29 17:46:46.016587: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:01:54.975736: Disconnected from server
+2026-03-29 18:04:51.234444: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:19:59.994299: Disconnected from server
+2026-03-29 18:21:28.032511: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:22:37.007457: Disconnected from server
+2026-03-29 18:22:41.039617: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:37:49.989066: Disconnected from server
+2026-03-29 18:38:18.697409: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:44:37.380257: Disconnected from server
+2026-03-29 18:44:46.091197: Connected to https://remote-agent-node.onrender.com
+2026-03-29 18:49:38.918683: Disconnected from server
+2026-03-30 00:09:58.024206: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-30 00:10:08.572995: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-03-30 00:10:15.592209: Connected to https://remote-agent-node.onrender.com
+2026-03-30 00:10:29.707340: start_camera received
+2026-03-30 00:10:32.328266: Camera stream started
+2026-03-30 00:10:54.638580: stop_camera received
+2026-03-30 00:10:55.010301: Camera stream stopped
+2026-03-30 00:11:42.790983: start_camera received
+2026-03-30 00:11:44.078778: Camera stream started
+2026-03-30 00:13:08.754949: stop_camera received
+2026-03-30 00:13:09.147246: Camera stream stopped
