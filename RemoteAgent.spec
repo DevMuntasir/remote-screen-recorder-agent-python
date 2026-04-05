@@ -1,11 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+project_dir = Path.cwd()
+env_file = project_dir / ".env"
+build_version_file = project_dir / "AGENT_VERSION_BUILD.txt"
+datas = []
+if env_file.exists():
+    datas.append((str(env_file), "."))
+if build_version_file.exists():
+    datas.append((str(build_version_file), "."))
+
 
 a = Analysis(
     ['socket_video_service.pyw'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=['cloudinary', 'engineio.async_drivers.threading', 'cv2'],
     hookspath=[],
     hooksconfig={},

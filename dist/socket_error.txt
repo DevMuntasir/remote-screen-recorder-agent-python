@@ -140,3 +140,148 @@
 2026-03-30 00:11:44.078778: Camera stream started
 2026-03-30 00:13:08.754949: stop_camera received
 2026-03-30 00:13:09.147246: Camera stream stopped
+2026-04-05 10:27:03.894706: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI186002\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-05 10:27:03.895395: Autostart enabled with command: "E:\apps\remote-share\background\dist\RemoteAgent.exe"
+2026-04-05 10:27:03.903394: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-05 10:27:03.904010: Agent booted. version=2026.04.05.012232 autoUpdate=True
+2026-04-05 10:27:03.904141: Agent version source: E:\apps\remote-share\background\dist\AGENT_VERSION.txt
+2026-04-05 10:27:03.904244: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 10:27:04.942856: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 10:27:04.943199: Failed to emit update state (failed): / is not a connected namespace.
+2026-04-05 10:27:06.017831: Connected to https://remote-agent-node.onrender.com
+2026-04-05 10:27:06.903384: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 10:28:12.451288: force_update_check received
+2026-04-05 10:28:13.231609: Auto-update available: 2026.04.05.012232 -> 2026.04.05.102725
+2026-04-05 10:28:27.822436: Auto-update downloaded: C:\Users\munta\AppData\Roaming\RemoteAgent\updates\RemoteAgent_update_1775363293.exe
+2026-04-05 10:28:27.856067: Updater launched for version 2026.04.05.102725: C:\Users\munta\AppData\Roaming\RemoteAgent\updates\agent_updater_1775363307.bat
+2026-04-05 10:30:05.733592: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI128722\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-05 10:30:05.734012: Autostart enabled with command: "E:\apps\remote-share\background\dist\RemoteAgent_2026.04.05.012232.exe"
+2026-04-05 10:30:05.734467: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-05 10:30:05.734835: Agent booted. version=2026.04.05.102725 autoUpdate=True
+2026-04-05 10:30:05.734963: Agent version source: E:\apps\remote-share\background\dist\AGENT_VERSION.txt
+2026-04-05 10:30:05.735184: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 10:30:07.064051: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:30:07.907422: Connected to https://remote-agent-node.onrender.com
+2026-04-05 10:30:08.700050: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:30:57.302437: force_update_check received
+2026-04-05 10:30:58.076914: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:32:17.419451: force_update_check received
+2026-04-05 10:32:18.363227: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:34:00.413848: force_update_check received
+2026-04-05 10:34:01.507776: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:41:28.488787: start_capture received
+2026-04-05 10:41:28.910056: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-05_10-41-28.mp4
+2026-04-05 10:41:34.688489: stop_capture received
+2026-04-05 10:41:34.771344: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-05_10-41-28.mp4
+2026-04-05 10:41:34.838971: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-05_10-41-28.mp4
+2026-04-05 10:41:41.190061: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1775364100/z4ei3hrnjbjxmq2ozmni.mp4
+2026-04-05 10:41:41.191851: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-05_10-41-28.mp4
+2026-04-05 10:44:50.340855: force_update_check received
+2026-04-05 10:44:54.561254: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:53:38.810279: force_update_check received
+2026-04-05 10:53:40.580314: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 10:59:42.813411: force_update_check received
+2026-04-05 10:59:45.436981: Auto-update check: up-to-date (2026.04.05.102725)
+2026-04-05 11:02:30.530223: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI339482\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-05 11:02:30.532352: Autostart enabled with command: "E:\apps\remote-share\background\dist\RemoteAgent.exe"
+2026-04-05 11:02:30.533255: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-05 11:02:30.534344: Agent booted. version=2026.04.05.105034 autoUpdate=True
+2026-04-05 11:02:30.535341: Agent version source: E:\apps\remote-share\background\dist\AGENT_VERSION.txt
+2026-04-05 11:02:30.535966: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 11:02:33.172098: Auto-update check: up-to-date (2026.04.05.105034)
+2026-04-05 11:02:34.547959: Connected to https://remote-agent-node.onrender.com
+2026-04-05 11:02:36.785310: Auto-update check: up-to-date (2026.04.05.105034)
+2026-04-05 11:03:39.476365: force_update_check received
+2026-04-05 11:03:42.732677: Auto-update check: up-to-date (2026.04.05.105034)
+2026-04-05 11:27:54.064723: Disconnected from server
+2026-04-05 11:28:23.179261: Connected to https://remote-agent-node.onrender.com
+2026-04-05 11:28:24.381811: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 11:43:06.715694: Disconnected from server
+2026-04-05 11:43:19.113300: Connected to https://remote-agent-node.onrender.com
+2026-04-05 11:43:20.368699: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 11:43:25.047347: Connected to https://remote-agent-node.onrender.com
+2026-04-05 11:43:26.515002: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 11:44:45.630589: Disconnected from server
+2026-04-05 11:45:14.786993: Connected to https://remote-agent-node.onrender.com
+2026-04-05 11:45:15.910336: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 12:00:25.119638: Disconnected from server
+2026-04-05 12:03:13.424227: Connected to https://remote-agent-node.onrender.com
+2026-04-05 12:03:14.363035: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 12:08:59.769943: Disconnected from server
+2026-04-05 12:26:37.081452: Connected to https://remote-agent-node.onrender.com
+2026-04-05 12:26:41.104008: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 12:28:14.750588: Disconnected from server
+2026-04-05 12:28:29.171206: Connected to https://remote-agent-node.onrender.com
+2026-04-05 12:28:30.028545: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 12:43:40.100958: Disconnected from server
+2026-04-05 12:44:39.544436: Connected to https://remote-agent-node.onrender.com
+2026-04-05 12:44:40.449394: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 12:59:50.109975: Disconnected from server
+2026-04-05 13:00:17.727307: Connected to https://remote-agent-node.onrender.com
+2026-04-05 13:00:18.903964: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 13:23:18.110133: Disconnected from server
+2026-04-05 13:23:46.246631: Connected to https://remote-agent-node.onrender.com
+2026-04-05 13:23:47.105781: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 13:50:24.108071: Disconnected from server
+2026-04-05 13:51:22.785009: Connected to https://remote-agent-node.onrender.com
+2026-04-05 13:51:23.717787: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:02:06.770984: Disconnected from server
+2026-04-05 14:02:17.130962: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:02:18.108497: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:03:33.331654: Disconnected from server
+2026-04-05 14:06:35.833935: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:06:37.775242: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:10:16.259342: Disconnected from server
+2026-04-05 14:10:19.916927: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:10:21.340052: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:25:31.180943: Disconnected from server
+2026-04-05 14:26:18.885410: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:26:20.357432: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:41:30.228789: Disconnected from server
+2026-04-05 14:41:58.404991: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:41:59.214477: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 14:57:09.153832: Disconnected from server
+2026-04-05 14:57:38.175162: Connected to https://remote-agent-node.onrender.com
+2026-04-05 14:57:39.365562: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 15:12:49.139754: Disconnected from server
+2026-04-05 15:13:26.471554: Connected to https://remote-agent-node.onrender.com
+2026-04-05 15:13:34.698740: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 15:43:31.204563: Disconnected from server
+2026-04-05 15:44:00.357036: Connected to https://remote-agent-node.onrender.com
+2026-04-05 15:44:01.267152: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 15:59:11.234191: Disconnected from server
+2026-04-05 15:59:30.077593: Connected to https://remote-agent-node.onrender.com
+2026-04-05 15:59:31.092421: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 16:28:33.208871: Disconnected from server
+2026-04-05 16:29:01.842581: Connected to https://remote-agent-node.onrender.com
+2026-04-05 16:29:02.725687: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 16:42:32.279466: force_update_check received
+2026-04-05 16:42:34.388223: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 17:07:55.150613: Disconnected from server
+2026-04-05 17:08:24.146447: Connected to https://remote-agent-node.onrender.com
+2026-04-05 17:08:25.067401: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 17:23:34.245918: Disconnected from server
+2026-04-05 17:24:03.030597: Connected to https://remote-agent-node.onrender.com
+2026-04-05 17:24:03.930806: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 17:39:13.244442: Disconnected from server
+2026-04-05 17:39:41.384070: Connected to https://remote-agent-node.onrender.com
+2026-04-05 17:39:42.227765: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 17:50:47.517335: Disconnected from server
+2026-04-05 17:50:53.976710: Connected to https://remote-agent-node.onrender.com
+2026-04-05 17:50:54.902035: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 18:06:04.202317: Disconnected from server
+2026-04-05 18:06:47.946761: Connected to https://remote-agent-node.onrender.com
+2026-04-05 18:06:48.886041: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 18:20:16.720000: Disconnected from server
+2026-04-05 18:20:21.577128: Connected to https://remote-agent-node.onrender.com
+2026-04-05 18:20:22.461192: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-05 18:20:42.993825: start_camera received
+2026-04-05 18:20:45.503175: Camera stream started
+2026-04-05 18:21:12.451547: stop_camera received
+2026-04-05 18:21:12.892318: Camera stream stopped
+2026-04-05 18:29:16.829081: force_update_check received
+2026-04-05 18:29:18.163200: Auto-update check: up-to-date (2026.04.05.105034)
+2026-04-05 18:33:50.030682: force_update_check received
+2026-04-05 18:33:51.795795: Auto-update check: up-to-date (2026.04.05.105034)
+2026-04-05 18:42:50.002839: force_update_check received
+2026-04-05 18:42:51.063888: Auto-update check: up-to-date (2026.04.05.105034)
