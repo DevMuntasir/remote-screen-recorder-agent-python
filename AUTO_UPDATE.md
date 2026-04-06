@@ -45,3 +45,17 @@ Output:
 - `dist/.env`
 
 Note: `AGENT_VERSION.txt` is used by the running agent to prevent repeated update loops.
+Important: always publish `dist/RemoteAgent.exe` for updates (do not publish `dist/RemoteAgent_<AGENT_VERSION>.exe`).
+
+## 5) Troubleshooting (`Failed to load Python DLL ... python314.dll`)
+
+- Build with Python `3.12` (the build script now prefers `3.12` automatically).
+- Re-publish the newly built `dist/RemoteAgent.exe`.
+- If target PCs still fail, install Microsoft Visual C++ Redistributable 2015-2022 (x64).
+
+If you see `Failed to load Python DLL ... python312.dll` during auto-update startup:
+
+- Rebuild with latest config (`RemoteAgent.spec` now uses `upx=False`).
+- Add antivirus exclusion for `RemoteAgent.exe` and `%LOCALAPPDATA%\Temp\_MEI*`.
+- Ensure enough free disk space in system drive for temp extraction.
+- Retry update after killing old process once (`taskkill /F /IM RemoteAgent.exe`).

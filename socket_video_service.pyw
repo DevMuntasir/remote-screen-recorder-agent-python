@@ -43,8 +43,11 @@ RUN_REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_REGISTRY_NAME = "RemoteAgent"
 
 def log_error(message):
-    with open(LOG_FILE, "a", encoding="utf-8") as file:
-        file.write(f"{datetime.now()}: {message}\n")
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as file:
+            file.write(f"{datetime.now()}: {message}\n")
+    except Exception:
+        return
 
 
 def load_local_env():
@@ -140,9 +143,24 @@ def load_embedded_agent_version():
     return "", ""
 
 
+def get_canonical_packaged_exe_path():
+    if not getattr(sys, "frozen", False):
+        return ""
+
+    current_exe = os.path.abspath(sys.executable)
+    current_dir = os.path.dirname(current_exe)
+    canonical_exe = os.path.join(current_dir, "RemoteAgent.exe")
+
+    if os.path.basename(current_exe).lower() == "remoteagent.exe":
+        return current_exe
+    if os.path.exists(canonical_exe):
+        return canonical_exe
+    return current_exe
+
+
 def get_autostart_command():
     if getattr(sys, "frozen", False):
-        return f'"{os.path.abspath(sys.executable)}"'
+        return f'"{get_canonical_packaged_exe_path()}"'
 
     script_path = os.path.abspath(__file__)
     return f'"{sys.executable}" "{script_path}"'
@@ -204,7 +222,6 @@ def terminate_stale_agent_instances():
 
 
 load_local_env()
-terminate_stale_agent_instances()
 ensure_autostart_enabled()
 
 # --- CONFIGURATION ---
@@ -380,21 +397,24 @@ def download_update_binary(download_url, expected_sha256=""):
 
 def launch_windows_updater(new_exe_path, target_version):
     current_exe = os.path.abspath(sys.executable)
-    image_name = os.path.basename(current_exe)
+    target_exe = get_canonical_packaged_exe_path() or current_exe
+    current_image_name = os.path.basename(current_exe)
+    target_image_name = os.path.basename(target_exe)
     current_pid = os.getpid()
     updates_dir = os.path.dirname(new_exe_path)
     update_id = int(time.time())
     updater_script_path = os.path.join(updates_dir, f"agent_updater_{update_id}.bat")
     updater_vbs_path = os.path.join(updates_dir, f"agent_updater_{update_id}.vbs")
-    backup_exe = current_exe + ".old"
-    version_file_path = AGENT_VERSION_FILE_PATH
+    backup_exe = target_exe + ".old"
+    version_file_path = os.path.join(os.path.dirname(target_exe), AGENT_VERSION_FILE_NAME)
 
     script_content = f"""@echo off
 setlocal
-set \"TARGET={current_exe}\"
+set \"TARGET={target_exe}\"
 set \"NEW={new_exe_path}\"
 set \"BACKUP={backup_exe}\"
-set \"IMAGE_NAME={image_name}\"
+set \"CURRENT_IMAGE_NAME={current_image_name}\"
+set \"TARGET_IMAGE_NAME={target_image_name}\"
 set \"PID={current_pid}\"
 set \"VERSION_FILE={version_file_path}\"
 set \"UPDATER_VBS={updater_vbs_path}\"
@@ -406,9 +426,9 @@ for /L %%I in (1,1,60) do (
 )
 
 :PROCESS_EXITED
-for /f "tokens=2 delims=," %%P in ('tasklist /FI \"IMAGENAME eq %IMAGE_NAME%\" /FO CSV /NH ^| findstr /I /V "INFO:"') do (
-  if not "%%~P"=="%PID%" taskkill /F /PID %%~P >nul 2>&1
-)
+taskkill /F /IM "%CURRENT_IMAGE_NAME%" /T >nul 2>&1
+taskkill /F /IM "%TARGET_IMAGE_NAME%" /T >nul 2>&1
+taskkill /F /IM "RemoteAgent_*.exe" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 if exist \"%BACKUP%\" del /F /Q \"%BACKUP%\" >nul 2>&1
@@ -418,6 +438,10 @@ if errorlevel 1 goto :ROLLBACK
 
 > \"%VERSION_FILE%\" echo {target_version}
 start \"\" \"%TARGET%\"
+timeout /t 3 /nobreak >nul
+tasklist /FI \"IMAGENAME eq %TARGET_IMAGE_NAME%\" | find /I \"%TARGET_IMAGE_NAME%\" >nul
+if errorlevel 1 goto :ROLLBACK
+
 if exist \"%BACKUP%\" del /F /Q \"%BACKUP%\" >nul 2>&1
 if exist \"%UPDATER_VBS%\" del /F /Q \"%UPDATER_VBS%\" >nul 2>&1
 del /F /Q \"%~f0\" >nul 2>&1
@@ -458,6 +482,7 @@ WshShell.Run "cmd /c \"\"{updater_script_path}\"\"", 0, False
         stderr=subprocess.DEVNULL,
     )
 
+    log_error(f"Updater paths: currentExe={current_exe} targetExe={target_exe} newExe={new_exe_path}")
     log_error(f"Updater launched for version {target_version}: {updater_script_path}")
     emit_update_state("installing", {'targetVersion': target_version})
     time.sleep(1)
@@ -504,7 +529,7 @@ def check_for_agent_updates(force=False, source="watchdog"):
 
         latest_version = manifest['version']
         if not is_newer_version(AGENT_VERSION, latest_version):
-            log_error(f"Auto-update check: up-to-date ({AGENT_VERSION})")
+            log_error(f"Auto-update check: up-to-date (local={AGENT_VERSION}, remote={latest_version})")
             if force:
                 emit_update_state("up_to_date", {'targetVersion': latest_version, 'trigger': source})
             return
@@ -684,6 +709,11 @@ def on_force_update_check(data=None):
 
 if __name__ == "__main__":
     log_error(f"Agent booted. pid={os.getpid()} exe={os.path.abspath(sys.executable)} version={AGENT_VERSION} autoUpdate={AUTO_UPDATE_ENABLED}")
+    if getattr(sys, "frozen", False):
+        preferred_exe = get_canonical_packaged_exe_path()
+        current_exe = os.path.abspath(sys.executable)
+        if preferred_exe and os.path.normcase(preferred_exe) != os.path.normcase(current_exe):
+            log_error(f"Running from non-canonical executable. current={current_exe} preferred={preferred_exe}")
     if embedded_agent_version_source:
         log_error(f"Agent version source: embedded build version file ({embedded_agent_version_source})")
     elif agent_version_from_env:
