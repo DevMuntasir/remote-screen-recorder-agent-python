@@ -342,6 +342,7 @@ is_image_sync_running = False
 image_sync_thread = None
 image_sync_stop_event = threading.Event()
 image_sync_reset_requested = False
+image_sync_reset_clear_hashes_requested = False
 
 if not os.path.exists(RECORDING_DIR):
     os.makedirs(RECORDING_DIR)
@@ -571,6 +572,7 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
     global is_image_sync_running
     global image_sync_thread
     global image_sync_reset_requested
+    global image_sync_reset_clear_hashes_requested
 
     try:
         state = load_image_sync_state()
@@ -653,17 +655,23 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
 
         if image_sync_stop_event.is_set():
             reset_requested = False
+            clear_hashes_requested = False
             with image_sync_lock:
                 if image_sync_reset_requested:
                     reset_requested = True
                     image_sync_reset_requested = False
+                    clear_hashes_requested = image_sync_reset_clear_hashes_requested
+                    image_sync_reset_clear_hashes_requested = False
 
             if reset_requested:
+                if clear_hashes_requested:
+                    uploaded_hashes = set()
                 save_image_sync_state([], 0, uploaded_hashes)
                 emit_image_sync_state('reset', {
                     'trigger': trigger_source,
                     'nextIndex': 0,
                     'totalFiles': 0,
+                    'clearedUploadedHashes': bool(clear_hashes_requested),
                 })
             else:
                 save_image_sync_state(pending_files, next_index, uploaded_hashes)
@@ -695,6 +703,7 @@ def start_image_sync(force_rescan=False, trigger_source="admin"):
     global is_image_sync_running
     global image_sync_thread
     global image_sync_reset_requested
+    global image_sync_reset_clear_hashes_requested
 
     if not CLOUDINARY_READY:
         emit_image_sync_state('failed', {
@@ -710,6 +719,7 @@ def start_image_sync(force_rescan=False, trigger_source="admin"):
 
         image_sync_stop_event.clear()
         image_sync_reset_requested = False
+        image_sync_reset_clear_hashes_requested = False
         is_image_sync_running = True
         image_sync_thread = threading.Thread(
             target=image_sync_worker,
@@ -732,6 +742,7 @@ def stop_image_sync(trigger_source="admin"):
 
 def reset_image_sync(trigger_source="admin", clear_uploaded_hashes=False):
     global image_sync_reset_requested
+    global image_sync_reset_clear_hashes_requested
 
     state = load_image_sync_state()
     uploaded_hashes = [] if clear_uploaded_hashes else state.get('uploadedHashes', [])
@@ -739,6 +750,7 @@ def reset_image_sync(trigger_source="admin", clear_uploaded_hashes=False):
     with image_sync_lock:
         if is_image_sync_running:
             image_sync_reset_requested = True
+            image_sync_reset_clear_hashes_requested = bool(clear_uploaded_hashes)
             image_sync_stop_event.set()
             emit_image_sync_state('resetting', {'trigger': trigger_source})
             return True
@@ -1141,8 +1153,6 @@ def connect():
     emit_agent_state('connected')
     emit_image_sync_snapshot()
     threading.Thread(target=check_for_agent_updates, kwargs={'force': True, 'source': 'connect'}, daemon=True).start()
-    if has_pending_image_sync_work() and not is_image_sync_running:
-        threading.Thread(target=start_image_sync, kwargs={'force_rescan': False, 'trigger_source': 'reconnect_resume'}, daemon=True).start()
 
 
 @sio.event
@@ -1259,18 +1269,18 @@ def on_stop_image_sync(data=None):
 
 @sio.on('reset_image_sync')
 def on_reset_image_sync(data=None):
-    clear_uploaded_hashes = False
+    clear_uploaded_hashes = True
     if isinstance(data, dict):
-        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', False))
+        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', True))
     log_error(f"reset_image_sync received (clearUploadedHashes={clear_uploaded_hashes})")
     reset_image_sync(trigger_source='reset_image_sync', clear_uploaded_hashes=clear_uploaded_hashes)
 
 
 @sio.on('stop_and_reset_image_sync')
 def on_stop_and_reset_image_sync(data=None):
-    clear_uploaded_hashes = False
+    clear_uploaded_hashes = True
     if isinstance(data, dict):
-        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', False))
+        clear_uploaded_hashes = bool(data.get('clearUploadedHashes', True))
     log_error(f"stop_and_reset_image_sync received (clearUploadedHashes={clear_uploaded_hashes})")
     reset_image_sync(trigger_source='stop_and_reset_image_sync', clear_uploaded_hashes=clear_uploaded_hashes)
 
