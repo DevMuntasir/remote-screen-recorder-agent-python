@@ -31,6 +31,8 @@ a = Analysis(
         'pymsgbox',
         'pytweening',
         'pygetwindow',
+        'sounddevice',
+        '_sounddevice',
     ],
     hookspath=[],
     hooksconfig={},

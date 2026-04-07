@@ -519,3 +519,19 @@
 2026-04-07 11:46:12.520196: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4
 2026-04-07 11:46:17.412872: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1775540777/dfd980frvyc6rj1tzemh.mp4
 2026-04-07 11:46:17.412872: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4
+2026-04-07 12:11:41.631197: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI320082\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-07 12:11:41.631197: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-07 12:11:41.631197: Agent booted. pid=30044 exe=E:\apps\remote-share\background\dist\RemoteAgent.exe version=2026.04.07.115929 autoUpdate=True
+2026-04-07 12:11:41.631197: Agent version source: embedded build version file (C:\Users\munta\AppData\Local\Temp\_MEI320082\AGENT_VERSION_BUILD.txt)
+2026-04-07 12:11:41.631197: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 12:11:46.238096: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 12:11:46.238096: Failed to emit update state (failed): / is not a connected namespace.
+2026-04-07 12:11:50.781831: Connected to https://remote-agent-node.onrender.com
+2026-04-07 12:11:52.967644: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 12:12:14.161715: start_voice_capture received
+2026-04-07 12:12:14.236954: Voice recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\voice_2026-04-07_12-12-14.wav
+2026-04-07 12:12:26.819385: stop_voice_capture received
+2026-04-07 12:12:26.891149: Voice recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\voice_2026-04-07_12-12-14.wav
+2026-04-07 12:12:26.891149: Uploading audio to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\voice_2026-04-07_12-12-14.wav
+2026-04-07 12:12:52.092933: Upload success (audio): https://res.cloudinary.com/dxf9h9jqf/video/upload/v1775542371/o0w9re88ntvlrukucpu7.wav
+2026-04-07 12:12:52.100961: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\voice_2026-04-07_12-12-14.wav
