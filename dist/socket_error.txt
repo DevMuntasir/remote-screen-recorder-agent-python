@@ -463,3 +463,59 @@
 2026-04-06 13:16:03.295677: Disconnected from server
 2026-04-06 13:16:23.540289: Connected to https://remote-agent-node.onrender.com
 2026-04-06 13:16:24.962191: Auto-update check: up-to-date (local=2026.04.06.130330, remote=2026.04.06.124501)
+2026-04-07 11:33:59.567564: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI552642\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-07 11:33:59.573989: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-07 11:33:59.573989: Agent booted. pid=43784 exe=E:\apps\remote-share\background\dist\RemoteAgent.exe version=2026.04.07.111915 autoUpdate=True
+2026-04-07 11:33:59.573989: Agent version source: embedded build version file (C:\Users\munta\AppData\Local\Temp\_MEI552642\AGENT_VERSION_BUILD.txt)
+2026-04-07 11:33:59.575042: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:34:05.250571: Connection error: HTTPSConnectionPool(host='remote-agent-node.onrender.com', port=443): Read timed out. (read timeout=5)
+2026-04-07 11:34:12.968644: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:34:12.968644: Failed to emit update state (failed): / is not a connected namespace.
+2026-04-07 11:34:14.373034: Connected to https://remote-agent-node.onrender.com
+2026-04-07 11:34:15.416831: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:34:24.388779: start_capture received
+2026-04-07 11:34:24.435702: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-24.mp4
+2026-04-07 11:34:24.435702: Recording loop error: PyAutoGUI was unable to import pyscreeze. (This is likely because you're running a version of Python that Pillow (which pyscreeze depends on) doesn't support currently.) Please install this module to enable the function you tried to call.
+2026-04-07 11:34:24.435702: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-24.mp4
+2026-04-07 11:34:24.435702: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-24.mp4
+2026-04-07 11:34:26.118858: start_capture received
+2026-04-07 11:34:26.118858: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-26.mp4
+2026-04-07 11:34:26.118858: Recording loop error: PyAutoGUI was unable to import pyscreeze. (This is likely because you're running a version of Python that Pillow (which pyscreeze depends on) doesn't support currently.) Please install this module to enable the function you tried to call.
+2026-04-07 11:34:26.129554: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-26.mp4
+2026-04-07 11:34:26.130063: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-26.mp4
+2026-04-07 11:34:26.472336: Cloudinary Error: Invalid video file
+2026-04-07 11:34:27.723562: Cloudinary Error: Invalid video file
+2026-04-07 11:34:36.572952: start_capture received
+2026-04-07 11:34:36.576101: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-36.mp4
+2026-04-07 11:34:36.576101: Recording loop error: PyAutoGUI was unable to import pyscreeze. (This is likely because you're running a version of Python that Pillow (which pyscreeze depends on) doesn't support currently.) Please install this module to enable the function you tried to call.
+2026-04-07 11:34:36.582818: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-36.mp4
+2026-04-07 11:34:36.582818: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-34-36.mp4
+2026-04-07 11:34:36.999241: Cloudinary Error: Invalid video file
+2026-04-07 11:35:05.983914: start_capture received
+2026-04-07 11:35:05.983914: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-05.mp4
+2026-04-07 11:35:05.983914: Recording loop error: PyAutoGUI was unable to import pyscreeze. (This is likely because you're running a version of Python that Pillow (which pyscreeze depends on) doesn't support currently.) Please install this module to enable the function you tried to call.
+2026-04-07 11:35:05.983914: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-05.mp4
+2026-04-07 11:35:05.983914: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-05.mp4
+2026-04-07 11:35:06.380570: Cloudinary Error: Invalid video file
+2026-04-07 11:35:07.384293: start_capture received
+2026-04-07 11:35:07.393243: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-07.mp4
+2026-04-07 11:35:07.393243: Recording loop error: PyAutoGUI was unable to import pyscreeze. (This is likely because you're running a version of Python that Pillow (which pyscreeze depends on) doesn't support currently.) Please install this module to enable the function you tried to call.
+2026-04-07 11:35:07.395261: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-07.mp4
+2026-04-07 11:35:07.397021: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-35-07.mp4
+2026-04-07 11:35:07.796810: Cloudinary Error: Invalid video file
+2026-04-07 11:45:53.893588: Loaded environment from: C:\Users\munta\AppData\Local\Temp\_MEI309602\.env | E:\apps\remote-share\background\dist\.env | E:\apps\remote-share\background\.env | E:\apps\remote-share\background\dist\.env
+2026-04-07 11:45:53.895094: Cloudinary configured for cloud: dxf9h9jqf
+2026-04-07 11:45:53.895617: Agent booted. pid=25852 exe=E:\apps\remote-share\background\dist\RemoteAgent.exe version=2026.04.07.114158 autoUpdate=True
+2026-04-07 11:45:53.895617: Agent version source: embedded build version file (C:\Users\munta\AppData\Local\Temp\_MEI309602\AGENT_VERSION_BUILD.txt)
+2026-04-07 11:45:53.895617: Auto-update enabled. manifest=https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:45:55.210293: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:45:55.211191: Failed to emit update state (failed): / is not a connected namespace.
+2026-04-07 11:45:56.550128: Connected to https://remote-agent-node.onrender.com
+2026-04-07 11:45:57.331170: Auto-update error: 404 Client Error: Not Found for url: https://remote-agent-node.onrender.com/agent/latest.json
+2026-04-07 11:46:03.774300: start_capture received
+2026-04-07 11:46:03.929252: Recording started: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4
+2026-04-07 11:46:12.365492: stop_capture received
+2026-04-07 11:46:12.515631: Recording stopped: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4
+2026-04-07 11:46:12.520196: Uploading to Cloudinary: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4
+2026-04-07 11:46:17.412872: Upload success: https://res.cloudinary.com/dxf9h9jqf/video/upload/f_mp4,vc_h264/v1775540777/dfd980frvyc6rj1tzemh.mp4
+2026-04-07 11:46:17.412872: Local file removed after upload: C:\Users\munta\AppData\Roaming\WinVideoLogs\rec_2026-04-07_11-46-03.mp4

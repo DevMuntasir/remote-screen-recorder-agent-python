@@ -7,8 +7,9 @@ taskkill /F /IM RemoteAgent.exe >nul 2>&1
 set "PYTHON_VER=3.12"
 py -%PYTHON_VER% -c "import sys" >nul 2>&1
 if errorlevel 1 (
-  echo Python %PYTHON_VER% not found. Falling back to 3.14...
-  set "PYTHON_VER=3.14"
+  echo Python %PYTHON_VER% is required for RemoteAgent build.
+  echo Please install Python 3.12 and run this script again.
+  goto :BUILD_ERROR
 )
 echo Using Python %PYTHON_VER% for build...
 

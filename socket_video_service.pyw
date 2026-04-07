@@ -602,7 +602,7 @@ def record_loop():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     file_path = os.path.join(RECORDING_DIR, f"rec_{timestamp}.mp4")
     out = None
-    should_upload = False
+    frames_written = 0
 
     try:
         screen_size = pyautogui.size()
@@ -612,12 +612,12 @@ def record_loop():
             log_error(f"VideoWriter failed to open: {file_path}")
             return
 
-        should_upload = True
         log_error(f"Recording started: {file_path}")
         while is_recording:
             img = pyautogui.screenshot()
             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             out.write(frame)
+            frames_written += 1
             time.sleep(1/FPS)
     except Exception as error:
         log_error(f"Recording loop error: {error}")
@@ -628,10 +628,10 @@ def record_loop():
         emit_agent_state('record_loop_stopped')
         log_error(f"Recording stopped: {file_path}")
         # Trigger upload in background
-        if should_upload and os.path.exists(file_path):
+        if frames_written > 0 and os.path.exists(file_path):
             threading.Thread(target=upload_to_cloudinary, args=(file_path,), daemon=True).start()
         else:
-            log_error(f"Upload skipped, recording file missing: {file_path}")
+            log_error(f"Upload skipped (frames={frames_written}, exists={os.path.exists(file_path)}): {file_path}")
 
 def camera_stream_loop():
     global is_camera_on
@@ -670,6 +670,14 @@ def disconnect():
 @sio.on('start_capture')
 def on_start(data=None):
     global is_recording
+
+    try:
+        pyautogui.screenshot(region=(0, 0, 1, 1))
+    except Exception as error:
+        log_error(f"start_capture blocked: screen capture runtime unavailable: {error}")
+        emit_agent_state('start_capture_failed')
+        return
+
     with recording_lock:
         if not is_recording:
             is_recording = True

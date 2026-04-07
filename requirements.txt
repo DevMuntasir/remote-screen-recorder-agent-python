@@ -2,5 +2,7 @@ python-socketio[client]
 opencv-python
 numpy
 pyautogui
+pillow>=10.4,<11
+pyscreeze>=1.0.1,<2
 cloudinary
 requests
