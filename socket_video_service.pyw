@@ -38,6 +38,7 @@ ENV_OVERRIDE_KEYS = {
     "AUDIO_SAMPLE_RATE",
     "AUDIO_CHANNELS",
     "AUDIO_BLOCK_FRAMES",
+    "IMAGE_SYNC_BATCH_UPLOAD_LIMIT",
     "IMAGE_SCAN_IGNORE_DRIVES",
 }
 
@@ -246,6 +247,10 @@ FPS = 8.0
 RECONNECT_DELAY_SECONDS = 5
 IMAGE_SYNC_RETRY_DELAY_SECONDS = 5
 IMAGE_EXTENSIONS = {".jpg", ".jpeg"}
+try:
+    IMAGE_SYNC_BATCH_UPLOAD_LIMIT = max(1, int(os.getenv("IMAGE_SYNC_BATCH_UPLOAD_LIMIT", "10")))
+except ValueError:
+    IMAGE_SYNC_BATCH_UPLOAD_LIMIT = 10
 IMAGE_SCAN_IGNORE_DRIVES = {
     drive.strip().upper().replace(":", "")
     for drive in os.getenv("IMAGE_SCAN_IGNORE_DRIVES", "C").split(",")
@@ -587,10 +592,13 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
             save_image_sync_state(pending_files, next_index, uploaded_hashes)
 
         total_files = len(pending_files)
+        uploaded_in_batch = 0
+        batch_pause_reached = False
         emit_image_sync_state('started', {
             'trigger': trigger_source,
             'totalFiles': total_files,
             'resumeIndex': next_index,
+            'batchLimit': IMAGE_SYNC_BATCH_UPLOAD_LIMIT,
         })
 
         if total_files == 0:
@@ -642,6 +650,11 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
                     'total': total_files,
                     'mediaType': 'image',
                 })
+                uploaded_in_batch += 1
+
+                if uploaded_in_batch >= IMAGE_SYNC_BATCH_UPLOAD_LIMIT:
+                    batch_pause_reached = True
+                    break
             except Exception as error:
                 log_error(f"Image upload failed ({file_path}): {error}")
                 emit_image_sync_state('retrying', {
@@ -680,6 +693,16 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
                     'nextIndex': next_index,
                     'totalFiles': total_files,
                 })
+        elif batch_pause_reached:
+            save_image_sync_state(pending_files, next_index, uploaded_hashes)
+            emit_image_sync_state('paused', {
+                'trigger': trigger_source,
+                'reason': 'batch_limit_reached',
+                'batchLimit': IMAGE_SYNC_BATCH_UPLOAD_LIMIT,
+                'uploadedInBatch': uploaded_in_batch,
+                'nextIndex': next_index,
+                'totalFiles': total_files,
+            })
         else:
             save_image_sync_state([], 0, uploaded_hashes)
             emit_image_sync_state('completed', {
