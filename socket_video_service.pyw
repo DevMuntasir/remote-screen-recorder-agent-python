@@ -35,6 +35,9 @@ ENV_OVERRIDE_KEYS = {
     "AUTO_UPDATE_ENABLED",
     "UPDATE_MANIFEST_URL",
     "UPDATE_CHECK_INTERVAL_SECONDS",
+    "UPDATE_DOWNLOAD_RETRY_COUNT",
+    "UPDATE_DOWNLOAD_RETRY_DELAY_SECONDS",
+    "MIN_UPDATE_BINARY_SIZE_BYTES",
     "AUDIO_SAMPLE_RATE",
     "AUDIO_CHANNELS",
     "AUDIO_BLOCK_FRAMES",
@@ -302,6 +305,18 @@ try:
     UPDATE_CHECK_INTERVAL_SECONDS = max(60, int(os.getenv("UPDATE_CHECK_INTERVAL_SECONDS", "3600")))
 except ValueError:
     UPDATE_CHECK_INTERVAL_SECONDS = 3600
+try:
+    UPDATE_DOWNLOAD_RETRY_COUNT = max(1, int(os.getenv("UPDATE_DOWNLOAD_RETRY_COUNT", "3")))
+except ValueError:
+    UPDATE_DOWNLOAD_RETRY_COUNT = 3
+try:
+    UPDATE_DOWNLOAD_RETRY_DELAY_SECONDS = max(1, int(os.getenv("UPDATE_DOWNLOAD_RETRY_DELAY_SECONDS", "2")))
+except ValueError:
+    UPDATE_DOWNLOAD_RETRY_DELAY_SECONDS = 2
+try:
+    MIN_UPDATE_BINARY_SIZE_BYTES = max(64 * 1024, int(os.getenv("MIN_UPDATE_BINARY_SIZE_BYTES", "524288")))
+except ValueError:
+    MIN_UPDATE_BINARY_SIZE_BYTES = 524288
 
 # Cloudinary Setup (Get these from your Cloudinary Dashboard)
 CLOUDINARY_READY = False
@@ -664,6 +679,9 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
                     'totalFiles': total_files,
                     'error': str(error),
                 })
+                # Skip permanently failed files so one bad upload cannot stall the whole sync queue.
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
                 time.sleep(IMAGE_SYNC_RETRY_DELAY_SECONDS)
 
         if image_sync_stop_event.is_set():
@@ -819,6 +837,25 @@ def fetch_update_manifest():
     version = str(manifest.get("version", "")).strip()
     download_url = str(manifest.get("url") or manifest.get("downloadUrl") or "").strip()
     sha256 = str(manifest.get("sha256") or "").strip().lower()
+    size_raw = manifest.get("size")
+    if size_raw is None:
+        size_raw = manifest.get("fileSize")
+    if size_raw is None:
+        size_raw = manifest.get("contentLength")
+
+    expected_size = 0
+    if size_raw not in (None, ""):
+        try:
+            expected_size = int(str(size_raw).strip())
+            if expected_size < 0:
+                expected_size = 0
+        except (TypeError, ValueError):
+            expected_size = 0
+            log_error(f"Update manifest has invalid size value: {size_raw}")
+
+    if sha256 and not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        log_error("Update manifest SHA256 format invalid; continuing without SHA256 validation")
+        sha256 = ""
 
     if not version:
         raise RuntimeError("Update manifest missing 'version'")
@@ -829,6 +866,7 @@ def fetch_update_manifest():
         'version': version,
         'url': download_url,
         'sha256': sha256,
+        'size': expected_size,
     }
 
 
@@ -843,28 +881,87 @@ def compute_sha256(file_path):
     return digest.hexdigest().lower()
 
 
-def download_update_binary(download_url, expected_sha256=""):
+def validate_update_binary(file_path, expected_sha256="", expected_size=0):
+    file_size = os.path.getsize(file_path)
+    if file_size <= 0:
+        raise RuntimeError("Downloaded update file is empty")
+
+    if expected_size and file_size != expected_size:
+        raise RuntimeError(f"Downloaded update size mismatch. expected={expected_size} actual={file_size}")
+
+    if file_size < MIN_UPDATE_BINARY_SIZE_BYTES:
+        raise RuntimeError(
+            f"Downloaded update is too small to be a valid executable ({file_size} bytes)"
+        )
+
+    with open(file_path, "rb") as file:
+        mz_header = file.read(2)
+    if mz_header != b"MZ":
+        raise RuntimeError("Downloaded update is not a valid Windows executable (MZ header missing)")
+
+    if expected_sha256:
+        actual_sha256 = compute_sha256(file_path)
+        if actual_sha256 != expected_sha256:
+            raise RuntimeError(f"SHA256 mismatch. expected={expected_sha256} actual={actual_sha256}")
+
+
+def download_update_binary(download_url, expected_sha256="", expected_size=0):
     updates_dir = os.path.join(os.getenv("APPDATA", BASE_DIR), "RemoteAgent", "updates")
     os.makedirs(updates_dir, exist_ok=True)
 
-    temp_file = os.path.join(updates_dir, f"RemoteAgent_update_{int(time.time())}.exe")
-    with requests.get(download_url, stream=True, timeout=(15, 180)) as response:
-        response.raise_for_status()
-        with open(temp_file, "wb") as file:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    file.write(chunk)
+    update_tag = f"{int(time.time())}_{os.getpid()}"
+    temp_file = os.path.join(updates_dir, f"RemoteAgent_update_{update_tag}.exe")
+    part_file = temp_file + ".part"
+    last_error = None
 
-    if expected_sha256:
-        actual_sha256 = compute_sha256(temp_file)
-        if actual_sha256 != expected_sha256:
-            try:
-                os.remove(temp_file)
-            except OSError:
-                pass
-            raise RuntimeError(f"SHA256 mismatch. expected={expected_sha256} actual={actual_sha256}")
+    for attempt in range(1, UPDATE_DOWNLOAD_RETRY_COUNT + 1):
+        downloaded_bytes = 0
+        content_length = 0
 
-    return temp_file
+        try:
+            for stale_file in (part_file, temp_file):
+                if os.path.exists(stale_file):
+                    os.remove(stale_file)
+
+            with requests.get(download_url, stream=True, timeout=(15, 180), allow_redirects=True) as response:
+                response.raise_for_status()
+                content_length_header = str(response.headers.get("Content-Length") or "").strip()
+                if content_length_header.isdigit():
+                    content_length = int(content_length_header)
+
+                with open(part_file, "wb") as file:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if not chunk:
+                            continue
+                        file.write(chunk)
+                        downloaded_bytes += len(chunk)
+
+            if downloaded_bytes <= 0:
+                raise RuntimeError("Downloaded zero bytes")
+            if content_length and downloaded_bytes != content_length:
+                raise RuntimeError(
+                    f"Incomplete download. expected={content_length} downloaded={downloaded_bytes}"
+                )
+
+            os.replace(part_file, temp_file)
+            validate_update_binary(temp_file, expected_sha256=expected_sha256, expected_size=expected_size)
+            return temp_file
+        except Exception as error:
+            last_error = error
+            log_error(f"Update download attempt {attempt}/{UPDATE_DOWNLOAD_RETRY_COUNT} failed: {error}")
+            for stale_file in (part_file, temp_file):
+                try:
+                    if os.path.exists(stale_file):
+                        os.remove(stale_file)
+                except OSError:
+                    pass
+
+            if attempt < UPDATE_DOWNLOAD_RETRY_COUNT:
+                time.sleep(UPDATE_DOWNLOAD_RETRY_DELAY_SECONDS * attempt)
+
+    raise RuntimeError(
+        f"Failed to download valid update after {UPDATE_DOWNLOAD_RETRY_COUNT} attempts: {last_error}"
+    )
 
 
 def launch_windows_updater(new_exe_path, target_version):
@@ -1010,7 +1107,11 @@ def check_for_agent_updates(force=False, source="watchdog"):
         emit_update_state("downloading", {'targetVersion': latest_version, 'trigger': source})
         log_error(f"Auto-update available: {AGENT_VERSION} -> {latest_version}")
 
-        downloaded_file = download_update_binary(manifest['url'], manifest.get('sha256', ""))
+        downloaded_file = download_update_binary(
+            manifest['url'],
+            manifest.get('sha256', ""),
+            manifest.get('size', 0),
+        )
         log_error(f"Auto-update downloaded: {downloaded_file}")
 
         launch_windows_updater(downloaded_file, latest_version)
