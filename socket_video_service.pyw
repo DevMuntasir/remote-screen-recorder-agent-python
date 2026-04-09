@@ -664,6 +664,9 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
                     'totalFiles': total_files,
                     'error': str(error),
                 })
+                # Skip permanently failed files so one bad upload cannot stall the whole sync queue.
+                next_index += 1
+                save_image_sync_state(pending_files, next_index, uploaded_hashes)
                 time.sleep(IMAGE_SYNC_RETRY_DELAY_SECONDS)
 
         if image_sync_stop_event.is_set():
