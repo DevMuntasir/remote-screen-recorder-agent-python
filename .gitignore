@@ -1,0 +1,29 @@
+# Distribution / packaging
+dist/
+dist
+
+# PyInstaller / Build temp folders
+build/
+build_tmp_*/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment and local configs
+.env
+.env.local
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs and error dumps
+*.log
+socket_error.txt
+
+# Screenshots and captured media
+screenshots/

@@ -1,3 +1,11 @@
 2026-03-29 11:47:02.510242: HTTPConnectionPool(host='localhost', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774763218.383748 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 2026-03-29 11:49:13.148823: HTTPConnectionPool(host='127.0.0.1', port=3000): Max retries exceeded with url: /socket.io/?transport=polling&EIO=4&t=1774763351.093454 (Caused by NewConnectionError("HTTPConnection(host='127.0.0.1', port=3000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 2026-03-29 12:06:10.852310: Connected to https://remote-agent-node.onrender.com
+2026-09-01 17:12:10.950848: Loaded environment from: e:\apps\remote-share\background\.env | E:\apps\remote-share\background\.env
+2026-09-01 17:12:10.953367: Autostart enabled with command: "C:\Users\munta\AppData\Local\Python\pythoncore-3.12-64\python.exe" "e:\apps\remote-share\background\socket_video_service.pyw"
+2026-09-01 17:12:10.955375: Running in standard user mode (isAdmin=False)
+2026-09-01 17:12:10.956374: Cloudinary configured for cloud: dxf9h9jqf
+2026-09-01 17:12:10.957375: Running in standard user mode (isAdmin=False)
+2026-09-01 17:12:24.498612: Loaded environment from: e:\apps\remote-share\background\.env | E:\apps\remote-share\background\.env
+2026-09-01 17:12:24.501750: Running in standard user mode (isAdmin=False)
+2026-09-01 17:12:24.502752: Cloudinary configured for cloud: dxf9h9jqf

